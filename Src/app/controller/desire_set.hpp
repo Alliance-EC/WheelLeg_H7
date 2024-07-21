@@ -139,7 +139,10 @@ private:
         auto dt                   = DWT_GetDeltaT64_Expect(&last_time, app::dt);
 
         desires.xd(0, 0) += x_d_ref * dt; // distance
-        desires.xd(1, 0) = 0;             // velocity
+        if (*mode_ == chassis_mode::balanceless)
+            desires.xd(1, 0) = x_d_ref;
+        else
+            desires.xd(1, 0) = 0;         // velocity
 
         auto gimbal_yaw_angle = GM6020_yaw_->get_angle();
         switch (*mode_) {                 // yaw

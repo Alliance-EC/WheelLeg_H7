@@ -41,7 +41,7 @@ public:
             kinematic_controller();
             leg_controller();
             wheel_model_hat();
-            // leg_coordinator();
+            //  leg_coordinator();
             torque_process();
         } while (false);
     }
@@ -72,8 +72,8 @@ private:
     double T_lwl_compensate_ = 0, T_lwr_compensate_ = 0;
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
     double wheel_compensate_kp_ = 0.0;
-    PID pid_roll_               = PID({0.0, 0.0, 0.0, 0.0, 0.0, 0.0, dt});
-    PID pid_length_             = PID({0.0, 0.0, 0.0, 100.0, 100.0, 0.0, dt});
+    PID pid_roll_               = PID({500, 0.0, 0.1, 500, 0.0, 0.0, dt});
+    PID pid_length_             = PID({1500, 10, 200, 500, 100.0, 0.0, dt});
 
     observer::observer* observer_instance   = observer::observer::GetInstance();
     DesireSet* desire_instance              = controller::DesireSet::GetInstance();
@@ -153,7 +153,7 @@ private:
 
         /*roll和腿长PID运算*/
         auto F_length = pid_length_.update(length_desire, length);
-        auto F_roll   = pid_roll_.update(roll_desire, imu_euler->x(), imu_gyro->x());
+        auto F_roll   = pid_roll_.update(roll_desire, -imu_euler->x(), -imu_gyro->x());
 
         F_l = F_length + F_roll + gravity_ff() - inertial_ff();
         F_r = F_length - F_roll + gravity_ff() + inertial_ff();
@@ -190,7 +190,10 @@ private:
         constexpr double max_torque_wheel = 5.0f;
         control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
         control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
-
+        if (*mode_ != chassis_mode::balanceless) {
+            control_torque_.wheel_L *= -1;
+            control_torque_.wheel_R *= -1;
+        }
         /*虚拟腿扭矩限幅，防止受大冲击时大幅度震荡*/
         T_bll_ = std::clamp(T_bll_, -LEG_T_MAX, LEG_T_MAX);
         T_blr_ = std::clamp(T_blr_, -LEG_T_MAX, LEG_T_MAX);

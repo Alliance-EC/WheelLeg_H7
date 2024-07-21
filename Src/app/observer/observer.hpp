@@ -63,6 +63,7 @@ public:
         imu_accel_    = &IMU_->output_vector.accel;
         imu_gyro_     = &IMU_->output_vector.gyro;
         imu_euler_    = &IMU_->output_vector.euler_angle;
+        //y轴反向
     }
     // output variables
     Eigen::Matrix<double, 10, 1> x_states_;
@@ -118,7 +119,7 @@ private:
         leg_length_.L = data[0];                                // ll
         leg_length_.L = length_L_LPF_.update(leg_length_.L);
 
-        angle_L_ = data[1] + imu_euler_->y();                   // 5 theta_ll
+        angle_L_ = data[1] - imu_euler_->y();                   // 5 theta_ll
         angle_L_ = angle_L_LPF_.update(angle_L_);
 
         angle_Ld_    = (angle_L_ - last_angle_L) / dt_;         // 6 theta_lld
@@ -133,7 +134,7 @@ private:
         leg_length_.R = data[0];                                // lr
         leg_length_.R = length_R_LPF_.update(leg_length_.R);
 
-        angle_R_ = data[1] + imu_euler_->y();                   // 7 theta_lr
+        angle_R_ = data[1] - imu_euler_->y();                   // 7 theta_lr
         angle_R_ = angle_R_LPF_.update(angle_R_);
 
         angle_Rd_    = (angle_R_ - last_angle_R) / dt_;         // 8 theta_lrd
