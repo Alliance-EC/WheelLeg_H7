@@ -1,0 +1,18 @@
+CompileFlags:
+    Add:
+        - -Ic:\program files (x86)\arm gnu toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include\c++\13.3.1
+        - -Ic:\program files (x86)\arm gnu toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include\c++\13.3.1\arm-none-eabi
+        - -Ic:\program files (x86)\arm gnu toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include\c++\13.3.1\backward
+        - -Ic:\program files (x86)\arm gnu toolchain arm-none-eabi\13.3 rel1\lib\gcc\arm-none-eabi\13.3.1\include
+        - -Ic:\program files (x86)\arm gnu toolchain arm-none-eabi\13.3 rel1\lib\gcc\arm-none-eabi\13.3.1\include-fixed
+        - -Ic:\program files (x86)\arm gnu toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include
+        - -I..\Middlewares
+        - -I..\Src
+        - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include\c++\13.3.1
+        - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include\c++\13.3.1\arm-none-eabi
+        - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include\c++\13.3.1\backward
+        - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\lib\gcc\arm-none-eabi\13.3.1\include
+        - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\lib\gcc\arm-none-eabi\13.3.1\include-fixed
+        - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include
+    CompilationDatabase: ./build/Debug
+    Compiler: c:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\bin\arm-none-eabi-gcc.exe

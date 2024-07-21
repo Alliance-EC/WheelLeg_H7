@@ -1,0 +1,177 @@
+#pragma once
+#include "app/system_parameters.hpp"
+#include "bsp/dwt/dwt.h"
+#include "leg_conv_reverse.hpp"
+#include "leg_pos.hpp"
+#include "module/DM8009/DM8009.hpp"
+#include "module/IMU/IMU.hpp"
+#include "tool/filter//low_pass_filter.hpp"
+#include "tool/filter/OLS.hpp"
+#include <Eigen/Dense>
+#include <cmath>
+#include <limits>
+
+namespace app::observer {
+struct leg_length {
+    double L;
+    double Ld;
+    double R;
+    double Rd;
+};
+struct support_force {
+    double L;
+    double R;
+};
+class observer {
+public:
+    static observer* GetInstance() {
+        static auto instance = new observer();
+        return instance;
+    }
+    void update() {
+        dt_ = DWT_GetDeltaT64_Expect(&dwt_count_, app::dt);
+        IMU_update();
+        leg_update();
+        wheel_update();
+
+        support_force_update();
+        // levitate_detect();
+        if ((*chassis_mode_ == chassis_mode::stop)
+            || (*chassis_mode_ == chassis_mode::balanceless)) {
+            reset_persistent_data();
+            status_levitate_ = false;
+        }
+        auto phi = IMU_->output_vector.Yaw_multi_turn;
+        x_states_ << distance, // 1 x
+            velocity_,         // 2 x_d
+            phi,               // 3 phi
+            imu_gyro_->z(),    // 4 phid
+            angle_L_,          // 5 theta_ll
+            angle_Ld_,         // 6 theta_lld
+            angle_R_,          // 7 theta_lr
+            angle_Rd_,         // 8 theta_lrd
+            -imu_euler_->y(),  // 9 theta_b
+            -imu_gyro_->y();   // 10 theta_bd
+    }
+    void Init(
+        module::IMU* IMU, std::array<module::DM8009*, 4> DM8009,
+        std::array<device::DjiMotor*, 2> M3508, chassis_mode* chassis_mode) {
+        IMU_          = IMU;
+        DM8009_       = DM8009;
+        M3508_        = M3508;
+        chassis_mode_ = chassis_mode;
+        imu_accel_    = &IMU_->output_vector.accel;
+        imu_gyro_     = &IMU_->output_vector.gyro;
+        imu_euler_    = &IMU_->output_vector.euler_angle;
+    }
+    // output variables
+    Eigen::Matrix<double, 10, 1> x_states_;
+    leg_length leg_length_;
+    support_force support_force_;
+    bool status_levitate_;
+    double roll_, leg_length_avg_;
+
+private:
+    observer()                                          = default; // 禁止外部构造
+    ~observer()                                         = default; // 禁止外部析构
+    observer(const observer& observer)                  = delete;  // 禁止外部拷贝构造
+    const observer& operator=(const observer& observer) = delete;  // 禁止外部赋值操作
+
+    static constexpr double inf = std::numeric_limits<double>::infinity();
+    static constexpr double nan = std::numeric_limits<double>::quiet_NaN();
+
+    // rclcpp::TimerBase::SharedPtr timer_observer_;
+
+    double angle_L_ = 0, angle_Ld_ = 0;
+    double angle_R_ = 0, angle_Rd_ = 0;
+    double velocity_ = 0.0, distance = 0.0;
+
+    module::IMU* IMU_                       = nullptr;
+    std::array<module::DM8009*, 4> DM8009_  = {};
+    std::array<device::DjiMotor*, 2> M3508_ = {};
+    const chassis_mode* chassis_mode_       = nullptr; // 设为指针以便在外部修改
+
+    uint32_t dwt_count_ = 0;
+    double dt_          = 0.0;
+    // bool allow_levitate_ = true;
+    const Eigen::Vector3f *imu_accel_ = nullptr, *imu_gyro_ = nullptr, *imu_euler_ = nullptr;
+
+    tool::filter::LowPassFilter angle_L_LPF_  = tool::filter::LowPassFilter(100);
+    tool::filter::LowPassFilter angle_R_LPF_  = tool::filter::LowPassFilter(100);
+    tool::filter::LowPassFilter length_L_LPF_ = tool::filter::LowPassFilter(50);
+    tool::filter::LowPassFilter length_R_LPF_ = tool::filter::LowPassFilter(50);
+    tool::filter::OLS velocity_OLS_           = tool::filter::OLS(50);
+
+    void IMU_update() {
+        IMU_->Acquire();
+        roll_ = -imu_euler_->x();
+    }
+    void leg_update() {
+        static double last_angle_L  = 0.0;
+        static double last_angle_R  = 0.0;
+        static double last_length_L = 0.0;
+        static double last_length_R = 0.0;
+        double data[2];
+        /*左腿虚拟角度和长度*/
+        leg_pos(DM8009_[leg_LF]->get_angle(), DM8009_[leg_LB]->get_angle(), data);
+
+        leg_length_.L = data[0];                                // ll
+        leg_length_.L = length_L_LPF_.update(leg_length_.L);
+
+        angle_L_ = data[1] + imu_euler_->y();                   // 5 theta_ll
+        angle_L_ = angle_L_LPF_.update(angle_L_);
+
+        angle_Ld_    = (angle_L_ - last_angle_L) / dt_;         // 6 theta_lld
+        last_angle_L = angle_L_;
+
+        leg_length_.Ld = (leg_length_.L - last_length_L) / dt_; // lld
+        last_length_L  = leg_length_.L;
+
+        /*右腿虚拟腿角度和长度*/
+        leg_pos(DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), data);
+
+        leg_length_.R = data[0];                                // lr
+        leg_length_.R = length_R_LPF_.update(leg_length_.R);
+
+        angle_R_ = data[1] + imu_euler_->y();                   // 7 theta_lr
+        angle_R_ = angle_R_LPF_.update(angle_R_);
+
+        angle_Rd_    = (angle_R_ - last_angle_R) / dt_;         // 8 theta_lrd
+        last_angle_R = angle_R_;
+
+        leg_length_.Rd = (leg_length_.R - last_length_R) / dt_; // lrd
+        last_length_R  = leg_length_.R;
+
+        leg_length_avg_ = (leg_length_.L + leg_length_.R) / 2.0f;
+    }
+
+    void wheel_update() {
+        velocity_ = (M3508_[wheel_L]->get_velocity() + M3508_[wheel_R]->get_velocity()) * Rw / 2.0f;
+        velocity_ = velocity_OLS_.Smooth(dt_, velocity_);
+        distance  = (M3508_[wheel_L]->get_angle() + M3508_[wheel_R]->get_angle()) * Rw / 2.0f;
+    }
+    void support_force_update() {
+        double data[2];
+        leg_conv_reverse(
+            DM8009_[leg_LF]->get_torque(), DM8009_[leg_LB]->get_torque(),
+            DM8009_[leg_LF]->get_angle(), DM8009_[leg_LB]->get_angle(), data);
+        auto F_l         = data[0];
+        auto T_l         = data[1];
+        auto P_l         = F_l * std::cos(angle_L_) + T_l * std::sin(angle_L_) / leg_length_.L;
+        support_force_.L = P_l;
+        leg_conv_reverse(
+            DM8009_[leg_RF]->get_torque(), DM8009_[leg_RB]->get_torque(),
+            DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), data);
+        auto F_r         = data[0];
+        auto T_r         = data[1];
+        auto P_r         = F_r * std::cos(angle_R_) + T_r * std::sin(angle_R_) / leg_length_.R;
+        support_force_.R = P_r;
+    }
+    void reset_persistent_data() {
+        distance = 0;
+        for (auto& i : M3508_)
+            i->reset_angle();
+    }
+};
+
+} // namespace app::observer
