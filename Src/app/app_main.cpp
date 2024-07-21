@@ -39,11 +39,15 @@ void Init() {
     for (uint8_t i = 0; i < 2; ++i) {
         M3508_instance[i] = new device::DjiMotor(
             DjiMotor_params().set_can_instance(&hfdcan2).set_rx_id(toU32(M3508_ID::ID1) + i));
+        M3508_instance[i]->SetOfflineCallback(
+            std::bind(&controller::DesireSet::CanLost, desire_instance));
     }
     for (uint8_t i = 0; i < 4; ++i) {
         auto params = module::DM8009_params();
         params.Dji_common.set_can_instance(&hfdcan3).set_rx_id(toU32(DM8009_ID::ID1) + i);
         DM8009_instance[i] = new module::DM8009(params);
+        DM8009_instance[i]->SetOfflineCallback(
+            std::bind(&controller::DesireSet::CanLost, desire_instance));
     }
     GM6020_yaw_instance = new device::DjiMotor(
         DjiMotor_params().set_can_instance(&hfdcan1).set_rx_id(toU32(GM6020_ID::ID1)));

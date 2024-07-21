@@ -107,6 +107,7 @@ public:
         GM6020_yaw_ = GM6020_yaw;
         mode_       = mode;
     }
+    void CanLost() { reset_all_controls(); }
 
     desire desires = {};
 
