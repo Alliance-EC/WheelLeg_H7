@@ -134,7 +134,7 @@ private:
 
     void set_states_desire(double x_velocity, double rotation_velocity = 0.0) {
         auto x_d_ref              = x_velocity * x_velocity_scale;
-        x_d_ref                   = std::clamp(x_velocity, -x_velocity_scale, x_velocity_scale);
+        x_d_ref                   = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);
         static uint32_t last_time = 0;
         auto dt                   = DWT_GetDeltaT64_Expect(&last_time, app::dt);
 
