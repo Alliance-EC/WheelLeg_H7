@@ -4,6 +4,7 @@
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "device/RC/remote_control_data.hpp"
 #include "module/IMU/IMU.hpp"
+#include "module/referee/status.hpp"
 #include <Eigen/Dense>
 #include <cmath>
 #include <limits>
@@ -27,9 +28,10 @@ public:
         using namespace device;
 
         do {
+            // 双下/未知状态/底盘云台非全通电
             if ((RC_->switch_left == RC_Switch::UNKNOWN || RC_->switch_right == RC_Switch::UNKNOWN)
-                || ((RC_->switch_left == RC_Switch::DOWN)
-                    && (RC_->switch_right == RC_Switch::DOWN))) {
+                || ((RC_->switch_left == RC_Switch::DOWN) && (RC_->switch_right == RC_Switch::DOWN))
+                || !(referee_->chassis_power_status && referee_->gimbal_power_status)) {
                 reset_all_controls();
                 SuperCap_ON_ = false;
                 *mode_       = chassis_mode::stop;
@@ -104,11 +106,12 @@ public:
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
-        chassis_mode* mode) {
+        chassis_mode* mode, module::referee::Status* referee) {
         IMU_data_   = IMU_output;
         RC_         = RC;
         GM6020_yaw_ = GM6020_yaw;
         mode_       = mode;
+        referee_    = referee;
     }
     void CanLost() { reset_all_controls(); }
 
@@ -131,6 +134,7 @@ private:
     const device::RC_status* RC_               = nullptr;
     const module::IMU_output_vector* IMU_data_ = nullptr;
     chassis_mode* mode_                        = nullptr;
+    module::referee::Status* referee_          = nullptr;
 
     device::RC_Keyboard last_keyboard_  = {};
     device::RC_Switch last_switch_right = {};
@@ -170,7 +174,7 @@ private:
         }
     }
     void set_length_desire(double length_speed) {
-        constexpr double length_speed_scale = 0.00015;
+        constexpr double length_speed_scale = 0.0003;
         desires.leg_length += length_speed * length_speed_scale;
         desires.leg_length = std::clamp(desires.leg_length, 0.12, 0.27);
     }

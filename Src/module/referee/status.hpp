@@ -15,16 +15,30 @@ public:
     }
 
     void update() {
-        auto data_ptr = referee_uart_.GetRxBuffer();
-        std::copy(
-            data_ptr, data_ptr + referee_uart_.GetTrueRxSize(),
-            reinterpret_cast<uint8_t*>(&frame_));
-        if (dji_crc::verify_crc8(frame_.header)) {
+        const auto data_ptr = referee_uart_.GetRxBuffer();
+        auto data_size      = referee_uart_.GetTrueRxSize();
+        uint16_t ptr_offset = 0;
+        while (ptr_offset < data_size) {
+            const auto now_ptr = data_ptr + ptr_offset;
+            if (ptr_offset + sizeof(frame_.header) > data_size) // 防止越界访问
+                break;
+            std::copy(
+                now_ptr, now_ptr + sizeof(frame_.header),
+                reinterpret_cast<uint8_t*>(&frame_.header));
             auto frame_size = sizeof(frame_.header) + sizeof(frame_.body.command_id)
                             + frame_.header.data_length + sizeof(uint16_t);
-            if (dji_crc::verify_crc16(&frame_, frame_size)) {
-                process_frame();
+            if (ptr_offset + frame_size > data_size)
+                break;
+
+            std::copy(now_ptr, now_ptr + frame_size, reinterpret_cast<uint8_t*>(&frame_));
+            if (dji_crc::verify_crc8(frame_.header)) {
+                if (dji_crc::verify_crc16(&frame_, frame_size)) {
+                    process_frame();
+                    ptr_offset += frame_size;
+                    continue;
+                }
             }
+            ptr_offset++;
         }
     }
 
@@ -36,10 +50,24 @@ public:
     double buffer_energy_       = 60;
 
 private:
-    Status()                                      = default; // 禁止外部构造
-    ~Status()                                     = default; // 禁止外部析构
-    Status(const Status& Status)                  = delete;  // 禁止外部拷贝构造
-    const Status& operator=(const Status& Status) = delete;  // 禁止外部赋值操作
+    Status()                                      = default;    // 禁止外部构造
+    ~Status()                                     = default;    // 禁止外部析构
+    Status(const Status& Status)                  = delete;     // 禁止外部拷贝构造
+    const Status& operator=(const Status& Status) = delete;     // 禁止外部赋值操作
+
+    Frame frame_;
+
+    tool::daemon robot_status_daemon_ =
+        tool::daemon(30, std::bind(&Status::robot_status_receive_error_callback, this));
+    tool::daemon power_heat_daemon_ =
+        tool::daemon(3, std::bind(&Status::power_heat_receive_error_callback, this));
+    ;
+    bsp::uart referee_uart_ = bsp::uart({&huart7, sizeof(Frame), std::bind(&Status::update, this)});
+
+    // When referee system loses connection unexpectedly,
+    // use these indicators make sure the robot safe.
+    // Chassis: Health priority with level 1
+    static constexpr double safe_chassis_power_limit = 45;
 
     void process_frame() {
         auto command_id = frame_.body.command_id;
@@ -102,20 +130,6 @@ private:
         chassis_power_ = 0.0;
         buffer_energy_ = 60.0;
     }
-
-    // When referee system loses connection unexpectedly,
-    // use these indicators make sure the robot safe.
-    // Chassis: Health priority with level 1
-    static constexpr double safe_chassis_power_limit = 45;
-
-    Frame frame_;
-
-    tool::daemon robot_status_daemon_ =
-        tool::daemon(3, std::bind(&Status::robot_status_receive_error_callback, this));
-    tool::daemon power_heat_daemon_ =
-        tool::daemon(30, std::bind(&Status::power_heat_receive_error_callback, this));
-    ;
-    bsp::uart referee_uart_ = bsp::uart({&huart7, sizeof(Frame), std::bind(&Status::update, this)});
 };
 
 } // namespace module::referee
