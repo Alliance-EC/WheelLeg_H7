@@ -2,7 +2,6 @@
 #include "app/system_parameters.hpp"
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "tool/pid/pid.hpp"
-#include "tool/pid/pid.hpp"
 #include <numbers>
 
 using namespace device;
@@ -16,12 +15,12 @@ struct DM8009_params {
         this->angle_pid_params = {
             .Kp            = 20.0f,
             .Ki            = 0.0f,
-            .Kd            = 0.5f,
+            .Kd            = 0.0f,
             .MaxOut        = 40.0f,
             .IntegralLimit = 0.0f,
             .Expect_dt     = app::dt};
         this->speed_pid_params = {
-            .Kp            = 1.0f,
+            .Kp            = 5.0f,
             .Ki            = 0.0f,
             .Kd            = 0.0f,
             .MaxOut        = 40.0f,
@@ -55,9 +54,11 @@ public:
     }
     void update() {
         switch (mode_) {
-        case DM8009_mode::angle:
-            calculated_torque_ = angle_pid_.update(angle_target_, get_angle());
+        case DM8009_mode::angle: {
+            calculated_torque_ = speed_pid_.update(0, get_velocity())
+                               + angle_pid_.update(angle_target_, get_angle());
             break;
+        }
         case DM8009_mode::velocity:
             calculated_torque_ = speed_pid_.update(velocity_target_, get_velocity());
             break;

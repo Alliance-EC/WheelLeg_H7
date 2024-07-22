@@ -122,6 +122,8 @@ public:
         raw_current_to_torque_coefficient_ =
             sign * config.reduction_ratio * torque_constant / raw_current_max * current_max;
         torque_to_raw_current_coefficient_ = 1 / raw_current_to_torque_coefficient_;
+        if (config.motor_type == DjiMotorType::DM8009)
+            raw_current_to_torque_coefficient_ = sign * torque_constant / 1000; // feedback unit:mA
 
         reduction_ratio_ = config.reduction_ratio;
         max_torque_      = 1 * config.reduction_ratio * torque_constant * current_max;
@@ -132,9 +134,8 @@ public:
     }
 
     void Decode() {
-        DjiMotorFeedback data;
-        can_.GetRxData(reinterpret_cast<uint8_t*>(&data));
-        int raw_angle = data.angle;
+        can_.GetRxData(reinterpret_cast<uint8_t*>(&raw_data_));
+        int raw_angle = raw_data_.angle;
 
         // Angle unit: rad
         int angle = raw_angle - encoder_zero_point_;
@@ -153,10 +154,10 @@ public:
         }
 
         // Velocity unit: rad/s
-        velocity_ = raw_velocity_to_velocity_coefficient_ * static_cast<double>(data.velocity);
+        velocity_ = raw_velocity_to_velocity_coefficient_ * static_cast<double>(raw_data_.velocity);
 
         // Torque unit: N*m
-        torque_ = raw_current_to_torque_coefficient_ * static_cast<double>(data.current);
+        torque_ = raw_current_to_torque_coefficient_ * static_cast<double>(raw_data_.current);
 
         last_raw_angle_ = raw_angle;
     }
@@ -174,6 +175,8 @@ public:
     [[nodiscard]] double get_velocity() const { return velocity_; }
     [[nodiscard]] double get_torque() const { return torque_; }
     [[nodiscard]] double get_max_torque() const { return max_torque_; }
+
+    [[nodiscard]] double get_raw_current() const { return static_cast<double>(raw_data_.current); }
 
     [[nodiscard]] uint8_t get_index() const {
         switch (motor_type_) {
@@ -204,6 +207,7 @@ private:
     double torque_;
 
     DjiMotorType motor_type_;
+    DjiMotorFeedback raw_data_;
 
     friend class DjiMotor_sender;
 };
