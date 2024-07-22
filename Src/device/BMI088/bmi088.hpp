@@ -162,7 +162,7 @@ private:
     BMI088_Data bmi088_data_;
     // 标定数据
     static constexpr std::array<float, 3> pre_cali_offset = {
-        -0.00410608854, 0.00282221776, -0.00325446506};
+        -0.00505202683, 0.00223287498, -0.00349383592};
     float gyro_offset_[3] = {}; // 陀螺仪零偏
     // float acc_offset_[3]                                  = {}; // 加速度计零偏
     //  传感器灵敏度,用于计算实际值(regNdef.h中定义)

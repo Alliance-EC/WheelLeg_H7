@@ -35,7 +35,7 @@ static chassis_mode chassis_mode_;
 static volatile double x_states_watch[10];
 void Init() {
     __disable_irq();
-    IMU_instance = new module::IMU(IMU_params(this_board).set_angle_offset({0.0339195281, 0, 0}));
+    IMU_instance = new module::IMU(IMU_params(this_board).set_angle_offset({0.0369768739, 0, 0}));
     RC_instance  = new device::remote_control(RC_params(this_board));
     referee_instance  = module::referee::Status::GetInstance();
     supercap_instance = new device::SuperCap(SuperCap_params().set_can_instance(&hfdcan1));
@@ -67,17 +67,18 @@ void Init() {
     M3508_instance[1]->configure(M3508_config);
     M3508_instance[0]->configure(M3508_config.reverse()); // 顺序不要变
 
-    DM8009_instance[0]->configure(6459, true);
-    DM8009_instance[1]->configure(2621, true);
-    DM8009_instance[2]->configure(1831);
-    DM8009_instance[3]->configure(134);
+    DM8009_instance[0]->configure(6437, true);
+    DM8009_instance[1]->configure(2615, true);
+    DM8009_instance[2]->configure(1794);
+    DM8009_instance[3]->configure(131);
 
     GM6020_yaw_instance->configure(
         device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(676));
 
     observer_instance->Init(IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_);
     desire_instance->Init(
-        &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, &chassis_mode_);
+        &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, &chassis_mode_,
+        referee_instance);
     controller_instance->Init(
         IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_, supercap_instance,
         referee_instance);
