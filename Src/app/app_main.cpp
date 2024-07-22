@@ -35,8 +35,8 @@ static chassis_mode chassis_mode_;
 static volatile double x_states_watch[10];
 void Init() {
     __disable_irq();
-    IMU_instance      = new module::IMU(IMU_params(this_board));
-    RC_instance       = new device::remote_control(RC_params(this_board));
+    IMU_instance = new module::IMU(IMU_params(this_board).set_angle_offset({0.0339195281, 0, 0}));
+    RC_instance  = new device::remote_control(RC_params(this_board));
     referee_instance  = module::referee::Status::GetInstance();
     supercap_instance = new device::SuperCap(SuperCap_params().set_can_instance(&hfdcan1));
 

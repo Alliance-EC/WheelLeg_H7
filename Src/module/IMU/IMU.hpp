@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <cstdint>
+#include <utility>
 
 namespace module {
 struct IMU_output_vector {
@@ -16,6 +17,7 @@ struct IMU_output_vector {
 };
 struct IMU_params {
     device::BMI088_params bmi088_params = {};
+    Eigen::Vector3f angle_offset        = {0.0f, 0.0f, 0.0f};
     std::function<void()> callback      = nullptr;
 
     explicit IMU_params(app::board board) {
@@ -61,6 +63,9 @@ struct IMU_params {
     IMU_params& set_cali_mode(device::BMI088_Calibrate_Mode mode) {
         return bmi088_params.cali_mode = mode, *this;
     }
+    IMU_params& set_angle_offset(Eigen::Vector3f offset) {
+        return this->angle_offset = std::move(offset), *this;
+    }
 };
 struct IMU_data {
     float gyro[3]  = {};
@@ -76,7 +81,8 @@ class IMU {
 public:
     explicit IMU(const IMU_params& params)
         : bmi088_(params.bmi088_params)
-        , callback_(params.callback) {
+        , callback_(params.callback)
+        , angle_offset(params.angle_offset) {
         bmi088_.SetCallback(std::bind(&IMU::update, this));
         gyro_offset = bmi088_.GetGyroOffset();
 
@@ -130,6 +136,7 @@ private:
 
     Eigen::Vector3f gyro_offset  = {0.0f, 0.0f, 0.0f};
     Eigen::Vector3f accel_offset = {0.0f, 0.0f, 0.0f};
+
 // Fucking shit ，waiting C++ Matrix
 #define BMI088_BOARD_INSTALL_SPIN_MATRIX \
     {0.0f, 1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, { 0.0f, 0.0f, 1.0f }
@@ -144,6 +151,7 @@ private:
     IMU_data INS_data_ = {};
     device::bmi088 bmi088_;
     std::function<void()> callback_ = nullptr;
+    Eigen::Vector3f angle_offset    = {0.0f, 0.0f, 0.0f};
     IMU_output INS_output_;
     bool AHRS_ready_ = false;
 
@@ -191,6 +199,9 @@ private:
                 INS_data_.quat, &INS_output_.euler_angle[INS_YAW_ADDRESS_OFFSET],
                 &INS_output_.euler_angle[INS_PITCH_ADDRESS_OFFSET],
                 &INS_output_.euler_angle[INS_ROLL_ADDRESS_OFFSET]);
+            for (uint8_t i = 0; i < 3; i++) {
+                INS_output_.euler_angle[i] += angle_offset[i];
+            }
 
             // get Yaw total, yaw数据可能会超过360,处理一下方便其他功能使用(如小陀螺)
             static float last_yaw_angle    = 0; // 上一次的yaw角度
