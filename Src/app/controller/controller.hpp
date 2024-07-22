@@ -4,6 +4,8 @@
 #include "app/observer/observer.hpp"
 #include "app/system_parameters.hpp"
 #include "desire_set.hpp"
+#include "device/super_cap/super_cap.hpp"
+#include "module/referee/status.hpp"
 #include "speed_hat.hpp"
 #include "tool/pid/pid.hpp"
 #include <Eigen/Dense>
@@ -30,7 +32,7 @@ public:
 
     void update() {
         do {
-            // super_cap_controller();
+            super_cap_controller();
             if (*mode_ == chassis_mode::balanceless) {
                 velocity_control((*xd_)(1, 0) * 0.5, (*xd_)(2, 0) - (*x_states_)(2, 0));
                 break;
@@ -47,13 +49,16 @@ public:
     }
     void Init(
         module::IMU* IMU, std::array<module::DM8009*, 4> DM8009,
-        std::array<device::DjiMotor*, 2> M3508, chassis_mode* chassis_mode) {
+        std::array<device::DjiMotor*, 2> M3508, chassis_mode* chassis_mode,
+        device::SuperCap* super_cap, module::referee::Status* referee) {
         IMU_      = IMU;
         DM8009_   = DM8009;
         M3508_    = M3508;
         mode_     = chassis_mode;
         imu_euler = &IMU_->output_vector.euler_angle;
         imu_gyro  = &IMU_->output_vector.gyro;
+        referee_  = referee;
+        SuperCap_ = super_cap;
     }
 
     control_torque control_torque_ = {};
@@ -71,21 +76,24 @@ private:
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
     double T_lwl_compensate_ = 0, T_lwr_compensate_ = 0;
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
+
     double wheel_compensate_kp_ = 0.0;
     PID pid_roll_               = PID({500, 0.0, 0.1, 500, 0.0, 0.0, dt});
     PID pid_length_             = PID({1500, 10, 200, 500, 100.0, 0.0, dt});
 
-    observer::observer* observer_instance   = observer::observer::GetInstance();
-    DesireSet* desire_instance              = controller::DesireSet::GetInstance();
+    observer::observer* observer_           = observer::observer::GetInstance();
+    DesireSet* desire_                      = controller::DesireSet::GetInstance();
     std::array<module::DM8009*, 4> DM8009_  = {};
     std::array<device::DjiMotor*, 2> M3508_ = {};
     module::IMU* IMU_                       = nullptr;
+    device::SuperCap* SuperCap_             = nullptr;
+    module::referee::Status* referee_       = nullptr;
 
-    const Eigen::Matrix<double, 10, 1>* xd_       = &desire_instance->desires.xd;
-    const Eigen::Matrix<double, 10, 1>* x_states_ = &observer_instance->x_states_;
-    const observer::leg_length* leg_length_       = &observer_instance->leg_length_;
-    const double* length_desire_                  = &desire_instance->desires.leg_length;
-    const double* roll_desire_                    = &desire_instance->desires.roll;
+    const Eigen::Matrix<double, 10, 1>* xd_       = &desire_->desires.xd;
+    const Eigen::Matrix<double, 10, 1>* x_states_ = &observer_->x_states_;
+    const observer::leg_length* leg_length_       = &observer_->leg_length_;
+    const double* length_desire_                  = &desire_->desires.leg_length;
+    const double* roll_desire_                    = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = nullptr;
 
@@ -120,6 +128,29 @@ private:
         last_mode = mode;
         return mode;
     }
+    void super_cap_controller() {
+        device::SuperCapControl SuperCap_set_ = {};
+        const auto power_limit                = referee_->chassis_power_limit_;
+        const auto power                      = referee_->chassis_power_;
+        const auto power_level                = referee_->chassis_power_level;
+        const auto power_buffer               = referee_->buffer_energy_;
+        /*超功率调低超电充电等级,否则发送正常功率等级*/
+        SuperCap_set_.power_level = power >= power_limit ? 0 : power_level;
+        /*超电自动开启后在缓冲能量充满时关闭，操作手按键开启的则不会自动关闭*/
+        if ((power > power_limit) && (power_buffer / (power - power_limit) < 0.3)) {
+            SuperCap_set_.control_ON = true;
+        } else if (power_buffer >= 60.0) {
+            SuperCap_set_.control_ON = false;
+        }
+
+        if (desire_->SuperCap_ON_) {
+            SuperCap_set_.control_ON = true;
+        }
+        if (SuperCap_->Info.voltage < 12.0) {
+            SuperCap_set_.control_ON = false;
+        }
+        SuperCap_->write_data(SuperCap_set_);
+    }
     void kinematic_controller() {
         double lqr_k[40];
         LQR_k(leg_length_->L, leg_length_->R, lqr_k);
@@ -153,7 +184,7 @@ private:
 
         /*roll和腿长PID运算*/
         auto F_length = pid_length_.update(length_desire, length);
-        auto F_roll   = pid_roll_.update(roll_desire, -imu_euler->x(), -imu_gyro->x());
+        auto F_roll   = pid_roll_.update(roll_desire, imu_euler->x(), imu_gyro->x());
 
         F_l = F_length + F_roll + gravity_ff() - inertial_ff();
         F_r = F_length - F_roll + gravity_ff() + inertial_ff();

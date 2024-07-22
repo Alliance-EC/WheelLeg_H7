@@ -28,9 +28,12 @@ public:
         }
     }
 
-    double robot_chassis_power_limit_ = safe_chassis_power_limit;
-    double robot_chassis_power_       = 0;
-    double robot_buffer_energy_       = 60;
+    double chassis_power_limit_ = safe_chassis_power_limit;
+    uint8_t chassis_power_level = 0;
+    bool chassis_power_status   = false;
+    bool gimbal_power_status    = false;
+    double chassis_power_       = 0;
+    double buffer_energy_       = 60;
 
 private:
     Status()                                      = default; // 禁止外部构造
@@ -68,17 +71,20 @@ private:
         // 30s check
         robot_status_daemon_.reload();
 
-        auto& data                 = reinterpret_cast<RobotStatus&>(frame_.body.data);
-        robot_chassis_power_limit_ = static_cast<double>(data.chassis_power_limit);
+        auto& data           = reinterpret_cast<RobotStatus&>(frame_.body.data);
+        chassis_power_limit_ = static_cast<double>(data.chassis_power_limit);
+        chassis_power_level  = data.robot_level;
+        chassis_power_status = data.power_management_chassis_output;
+        gimbal_power_status  = data.power_management_gimbal_output;
     }
 
     void update_power_heat_data() {
         // 3s check
         power_heat_daemon_.reload();
 
-        auto& data           = reinterpret_cast<PowerHeatData&>(frame_.body.data);
-        robot_chassis_power_ = data.chassis_power;
-        robot_buffer_energy_ = static_cast<double>(data.buffer_energy);
+        auto& data     = reinterpret_cast<PowerHeatData&>(frame_.body.data);
+        chassis_power_ = data.chassis_power;
+        buffer_energy_ = static_cast<double>(data.buffer_energy);
     }
 
     void update_robot_position() {}
@@ -91,12 +97,10 @@ private:
 
     void update_game_robot_position() {}
 
-    void robot_status_receive_error_callback() {
-        robot_chassis_power_limit_ = safe_chassis_power_limit;
-    }
+    void robot_status_receive_error_callback() { chassis_power_limit_ = safe_chassis_power_limit; }
     void power_heat_receive_error_callback() {
-        robot_chassis_power_ = 0.0;
-        robot_buffer_energy_ = 60.0;
+        chassis_power_ = 0.0;
+        buffer_energy_ = 60.0;
     }
 
     // When referee system loses connection unexpectedly,

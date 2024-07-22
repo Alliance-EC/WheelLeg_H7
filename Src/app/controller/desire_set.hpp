@@ -27,13 +27,12 @@ public:
         using namespace device;
 
         do {
-            auto mode = mode_;
             if ((RC_->switch_left == RC_Switch::UNKNOWN || RC_->switch_right == RC_Switch::UNKNOWN)
                 || ((RC_->switch_left == RC_Switch::DOWN)
                     && (RC_->switch_right == RC_Switch::DOWN))) {
                 reset_all_controls();
                 SuperCap_ON_ = false;
-                *mode        = chassis_mode::stop;
+                *mode_       = chassis_mode::stop;
                 break;
             }
 
@@ -42,19 +41,22 @@ public:
             if (((RC_->switch_left == RC_Switch::MIDDLE) && (RC_->switch_right == RC_Switch::DOWN))
                 || balanceless_mode_) {
                 reset_all_controls();
-                *mode = chassis_mode::balanceless;
+                *mode_ = chassis_mode::balanceless;
             } else if (RC_->switch_right == RC_Switch::MIDDLE) {
                 if (!last_keyboard_.c && RC_->keyboard.c) {
-                    *mode = *mode == chassis_mode::spin ? chassis_mode::follow : chassis_mode::spin;
+                    *mode_ =
+                        *mode_ == chassis_mode::spin ? chassis_mode::follow : chassis_mode::spin;
                 } else if (RC_->keyboard.a || RC_->keyboard.d) {
-                    *mode = chassis_mode::sideways;
+                    if (*mode_ != chassis_mode::sideways_L && *mode_ != chassis_mode::sideways_R)
+                        *mode_ =
+                            RC_->keyboard.a ? chassis_mode::sideways_L : chassis_mode::sideways_R;
                 } else if (
                     RC_->keyboard.w || RC_->keyboard.s
                     || (last_switch_right != RC_Switch::MIDDLE)) {
-                    *mode = chassis_mode::follow;
+                    *mode_ = chassis_mode::follow;
                 }
             } else if (RC_->switch_right == RC_Switch::UP) {
-                *mode = chassis_mode::spin;
+                *mode_ = chassis_mode::spin;
             } else {
                 reset_all_controls();
             }
@@ -62,7 +64,7 @@ public:
             auto keyboard_xmove = 1.0 * RC_->keyboard.w - RC_->keyboard.s;
             auto keyboard_ymove = 0.5 * RC_->keyboard.a - RC_->keyboard.d;
             auto keyboard_zmove = 0.5 * RC_->keyboard.q - RC_->keyboard.e;
-            switch (*mode) {
+            switch (*mode_) {
             case chassis_mode::follow:
                 if (RC_->keyboard.ctrl && (RC_->keyboard.w || RC_->keyboard.s)) {
                     set_states_desire(RC_->joystick_right.x() + keyboard_xmove * 0.35);
@@ -71,7 +73,8 @@ public:
                 }
                 set_length_desire(RC_->joystick_right.y() + keyboard_zmove);
                 break;
-            case chassis_mode::sideways:
+            case chassis_mode::sideways_L:
+            case chassis_mode::sideways_R:
                 if (RC_->keyboard.ctrl && (RC_->keyboard.a || RC_->keyboard.d)) {
                     set_states_desire(RC_->joystick_right.y() + keyboard_ymove * 0.35);
                 } else {
@@ -109,7 +112,8 @@ public:
     }
     void CanLost() { reset_all_controls(); }
 
-    desire desires = {};
+    desire desires    = {};
+    bool SuperCap_ON_ = false;
 
 private:
     DesireSet()                                            = default; // 禁止外部构造
@@ -128,7 +132,6 @@ private:
     const module::IMU_output_vector* IMU_data_ = nullptr;
     chassis_mode* mode_                        = nullptr;
 
-    bool SuperCap_ON_                   = false;
     device::RC_Keyboard last_keyboard_  = {};
     device::RC_Switch last_switch_right = {};
     bool balanceless_mode_              = false;
@@ -151,9 +154,13 @@ private:
         case chassis_mode::balanceless:
             desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
             break;
-        case chassis_mode::sideways:
+        case chassis_mode::sideways_L:
             desires.xd(2, 0) =
                 IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi / 2.0);
+            break;
+        case chassis_mode::sideways_R:
+            desires.xd(2, 0) =
+                IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle + std::numbers::pi / 2.0);
             break;
         case chassis_mode::spin: desires.xd(2, 0) += rotation_velocity * dt; break;
         default: break;
@@ -178,6 +185,7 @@ private:
         desires.roll       = 0;
         desires.leg_length = 0.12;
         *mode_             = chassis_mode::stop;
+        SuperCap_ON_       = false;
     }
 };
 

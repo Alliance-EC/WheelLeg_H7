@@ -3,6 +3,7 @@
 #include "controller/send_process.hpp"
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "device/RC/remote_control.hpp"
+#include "device/super_cap/super_cap.hpp"
 #include "module/DM8009/DM8009.hpp"
 #include "module/IMU/IMU.hpp"
 #include "module/referee/status.hpp"
@@ -15,26 +16,29 @@ using namespace module;
 namespace app {
 static module::IMU* IMU_instance;
 static device::remote_control* RC_instance;
+static module::referee::Status* referee_instance;
+static device::SuperCap* supercap_instance;
 
 static std::array<device::DjiMotor*, 2> M3508_instance;
 static std::array<module::DM8009*, 4> DM8009_instance;
 static device::DjiMotor* GM6020_yaw_instance;
 static device::DjiMotor_sender* DM8009_sender_instance;
 static device::DjiMotor_sender* m3508_sender_instance;
+
 static auto observer_instance   = observer::observer::GetInstance();
 static auto desire_instance     = controller::DesireSet::GetInstance();
 static auto controller_instance = controller::Controller::GetInstance();
 static auto sender_instance     = controller::SendProcess::GetInstance();
-static module::referee::Status* referee_instance;
 
 static chassis_mode chassis_mode_;
 
 static volatile double x_states_watch[10];
 void Init() {
     __disable_irq();
-    IMU_instance     = new module::IMU(IMU_params(this_board));
-    RC_instance      = new device::remote_control(RC_params(this_board));
-    referee_instance = module::referee::Status::GetInstance();
+    IMU_instance      = new module::IMU(IMU_params(this_board));
+    RC_instance       = new device::remote_control(RC_params(this_board));
+    referee_instance  = module::referee::Status::GetInstance();
+    supercap_instance = new device::SuperCap(SuperCap_params().set_can_instance(&hfdcan1));
 
     for (uint8_t i = 0; i < 2; ++i) {
         M3508_instance[i] = new device::DjiMotor(
@@ -74,7 +78,9 @@ void Init() {
     observer_instance->Init(IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_);
     desire_instance->Init(
         &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, &chassis_mode_);
-    controller_instance->Init(IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_);
+    controller_instance->Init(
+        IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_, supercap_instance,
+        referee_instance);
     sender_instance->Init(
         DM8009_instance, M3508_instance, DM8009_sender_instance, m3508_sender_instance,
         &chassis_mode_);
@@ -85,7 +91,7 @@ extern "C" void main_task_func(void* argument) {
     Init();
     while (true) {
         uint32_t wakeUpTime = osKernelGetTickCount();
-        TimeElapse(dt_watch, [&]() {
+        TimeElapse(dt_watch, [&]() {                      // 在release中删除
             desire_instance->update();
             observer_instance->update();
             controller_instance->update();
