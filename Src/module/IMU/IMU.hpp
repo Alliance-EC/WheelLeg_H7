@@ -132,7 +132,7 @@ private:
     Eigen::Vector3f accel_offset = {0.0f, 0.0f, 0.0f};
 // Fucking shit ，waiting C++ Matrix
 #define BMI088_BOARD_INSTALL_SPIN_MATRIX \
-    {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, { 0.0f, 0.0f, 1.0f }
+    {0.0f, 1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, { 0.0f, 0.0f, 1.0f }
 
     float gyro_scale_factor[3][3]  = {BMI088_BOARD_INSTALL_SPIN_MATRIX};
     float accel_scale_factor[3][3] = {BMI088_BOARD_INSTALL_SPIN_MATRIX};
