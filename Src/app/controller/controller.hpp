@@ -78,7 +78,7 @@ private:
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
 
     double wheel_compensate_kp_ = 0.0;
-    PID pid_roll_               = PID({500, 0.0, 0.1, 500, 0.0, 0.0, dt});
+    PID pid_roll_               = PID({500, 0.0, 1, 500, 0.0, 0.0, dt});
     PID pid_length_             = PID({1500, 10, 200, 500, 100.0, 0.0, dt});
 
     observer::observer* observer_           = observer::observer::GetInstance();

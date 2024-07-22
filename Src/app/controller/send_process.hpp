@@ -1,9 +1,10 @@
 #pragma once
-#include "tool/PID/PID.hpp"
 #include "app/system_parameters.hpp"
 #include "controller.hpp"
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "module/DM8009/DM8009.hpp"
+#include "tool/PID/PID.hpp"
+
 
 namespace app::controller {
 class SendProcess {
@@ -61,7 +62,7 @@ private:
     tool::PID wheel_R_PID_        = tool::PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
 
     inline void motor_fixed(double wheel_L_speed = 0, double wheel_R_speed = 0) {
-        constexpr double angle_offset = 10 / 180.0 * std::numbers::pi;
+        constexpr double angle_offset = 0.1 / 180.0 * std::numbers::pi;
         static_assert(angle_offset > 0 && angle_offset < module::DM8009::angle_offset);
         for (uint8_t i = 0; i < 4; ++i) {
             if (i == leg_LF || i == leg_RF)
