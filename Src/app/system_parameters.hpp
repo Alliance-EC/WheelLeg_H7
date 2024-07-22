@@ -3,7 +3,7 @@
 #include <cstdint>
 
 namespace app {
-constexpr double m_b   = 16.98;   // 身体质量
+constexpr double m_b   = 16.98;  // 身体质量
 constexpr double eta_l = 0.2945; // 质心位置系数
 constexpr double m_l   = 0.86;
 // 单腿质量
@@ -14,12 +14,13 @@ constexpr double Rw  = 0.06; // 轮子半径
 constexpr double dt = 0.001; // 执行周期
 
 enum class chassis_mode : uint8_t {
-    stop        = 0,
-    follow      = 1,
-    sideways    = 2,
-    spin        = 3,
-    balanceless = 4,
-    unknown     = 5
+    stop = 0,
+    follow,
+    sideways_L,
+    sideways_R,
+    spin,
+    balanceless,
+    unknown,
 };
 enum class board : uint8_t {
     UNKNOWN           = 0,
