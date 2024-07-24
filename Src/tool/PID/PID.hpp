@@ -50,7 +50,7 @@ public:
             double pout = Kp_ * error;
             double dout = 0;
             if (isNotZero(outside_differential))
-                dout = outside_differential;
+                dout = Kd_ * outside_differential;
             else
                 dout = Kd_ * (error - last_error_) / dt_;
 
