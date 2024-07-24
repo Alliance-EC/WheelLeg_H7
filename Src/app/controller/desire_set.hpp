@@ -1,4 +1,5 @@
 #pragma once
+#include "app/observer/observer.hpp"
 #include "app/system_parameters.hpp"
 #include "bsp/dwt/dwt.h"
 #include "device/Dji_motor/DJI_motor.hpp"
@@ -38,8 +39,6 @@ public:
                 break;
             }
 
-            balanceless_mode_ |= RC_->keyboard.r;
-            balanceless_mode_ &= !(RC_->keyboard.ctrl && RC_->keyboard.r);
             if (((RC_->switch_left == RC_Switch::MIDDLE) && (RC_->switch_right == RC_Switch::DOWN))
                 || balanceless_mode_) {
                 reset_all_controls();
@@ -48,6 +47,8 @@ public:
                 if (!last_keyboard_.c && RC_->keyboard.c) {
                     *mode_ =
                         *mode_ == chassis_mode::spin ? chassis_mode::follow : chassis_mode::spin;
+                } else if (!last_keyboard_.r && RC_->keyboard.r) {
+                    balanceless_mode_ = !balanceless_mode_;
                 } else if (RC_->keyboard.a || RC_->keyboard.d) {
                     if (*mode_ != chassis_mode::sideways_L && *mode_ != chassis_mode::sideways_R)
                         *mode_ =
