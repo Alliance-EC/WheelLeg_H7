@@ -176,10 +176,15 @@ private:
         Eigen::Map<Eigen::Matrix<double, 4, 10, Eigen::ColMajor>> LQR_gain(lqr_k);
 
         Eigen::Matrix<double, 10, 1> e_mat = -1.0 * (*xd_ - *x_states_);
-        // if (*status_levitate_) {
-        //     e_mat(0, 0) = 0;
-        //     e_mat(1, 0) = 0;
-        // }
+        if (observer_->status_levitate_) { // 腾空状态仅保持腿部竖直
+            e_mat(0, 0) = 0;
+            e_mat(1, 0) = 0;
+            e_mat(2, 0) = 0;
+            e_mat(3, 0) = 0;
+
+            e_mat(8, 0) = 0;
+            e_mat(9, 0) = 0;
+        }
         auto u_mat = LQR_gain * e_mat;
         T_lwl_     = u_mat(0, 0);
         T_lwr_     = u_mat(1, 0);
@@ -197,9 +202,8 @@ private:
             // return 0;
         };
 
-        auto length_desire = *length_desire_;
-        // auto roll_desire                     = *status_levitate_ ? 0.0 : *roll_desire_;
-        auto roll_desire = *roll_desire_;
+        auto length_desire = observer_->status_levitate_ ? 0.3 : *length_desire_;
+        auto roll_desire   = observer_->status_levitate_ ? 0.0 : *roll_desire_;
 
         /*roll和腿长PID运算*/
         auto F_length = pid_length_.update(length_desire, length);

@@ -103,6 +103,8 @@ public:
         } while (false);
         last_switch_right = RC_->switch_right;
         last_keyboard_    = RC_->keyboard;
+        if (observer_->status_levitate_)
+            reset_persistent_data();
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
@@ -135,6 +137,7 @@ private:
     const module::IMU_output_vector* IMU_data_ = nullptr;
     chassis_mode* mode_                        = nullptr;
     module::referee::Status* referee_          = nullptr;
+    observer::observer* observer_              = observer::observer::GetInstance();
 
     device::RC_Keyboard last_keyboard_  = {};
     device::RC_Switch last_switch_right = {};
@@ -191,6 +194,7 @@ private:
         *mode_             = chassis_mode::stop;
         SuperCap_ON_       = false;
     }
+    void reset_persistent_data() { desires.xd(0, 0) = 0; }
 };
 
 } // namespace app::controller
