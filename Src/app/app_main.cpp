@@ -18,6 +18,7 @@ static module::IMU* IMU_instance;
 static device::remote_control* RC_instance;
 static module::referee::Status* referee_instance;
 static device::SuperCap* supercap_instance;
+static module::CanComm* can_comm_instance;
 
 static std::array<device::DjiMotor*, 2> M3508_instance;
 static std::array<module::DM8009*, 4> DM8009_instance;
@@ -39,6 +40,7 @@ void Init() {
     RC_instance  = new device::remote_control(RC_params(this_board));
     referee_instance  = module::referee::Status::GetInstance();
     supercap_instance = new device::SuperCap(SuperCap_params().set_can_instance(&hfdcan1));
+    can_comm_instance = new module::CanComm(CanComm_params().set_can_instance(&hfdcan1));
 
     for (uint8_t i = 0; i < 2; ++i) {
         M3508_instance[i] = new device::DjiMotor(
@@ -103,6 +105,18 @@ extern "C" void main_task_func(void* argument) {
             x_states_watch[i] = observer_instance->x_states_[i];
         }
         osDelayUntil(wakeUpTime + 1);
+    }
+}
+extern "C" void comm_task_func(void* argument) {
+    while (true) {
+        ChassisStates data;
+        data.leg_length_L  = observer_instance->leg_length_.L;
+        data.leg_length_R  = observer_instance->leg_length_.R;
+        data.mode          = chassis_mode_;
+        data.chassis_angle = observer_instance->x_states_[2];
+        can_comm_instance->Send(data);
+        constexpr uint32_t refresh_rate = 1000 / 50;
+        osDelay(refresh_rate);
     }
 }
 } // namespace app
