@@ -103,7 +103,7 @@ private:
     uint32_t rx_id_;                                      // 接收id
     uint8_t rx_len_;                                      // 接收长度,可能为0-8
     std::function<void()> callback_;
-    tool::daemon daemon_ = tool::daemon(0.1);
+    tool::daemon daemon_ = tool::daemon(1);
 
     void Init() {
         txconf_.Identifier          = tx_id_;             // 发送id
