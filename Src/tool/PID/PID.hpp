@@ -64,6 +64,7 @@ public:
             integral_ = 0;
         }
         last_error_ = error;
+        out_        = output;
         return output;
     }
     void IntegralNoNagtive() { integral_ = std::max(integral_, 0.0); }
@@ -79,6 +80,9 @@ public:
     void SetKp(double Kp) { Kp_ = Kp; }
     void SetKi(double Ki) { Ki_ = Ki; }
     void SetKd(double Kd) { Kd_ = Kd; }
+    PID_params GetParams() {
+        return {Kp_, Ki_, Kd_, MaxOut_, IntegralLimit_, DeadBand_, Expect_dt_};
+    }
 
 private:
     double Kp_            = 0;
@@ -90,6 +94,7 @@ private:
 
     double last_error_ = 0;
     double integral_   = 0;
+    double out_        = 0;
 
     uint32_t DWT_CNT_ = 0;
     double dt_        = 0;
