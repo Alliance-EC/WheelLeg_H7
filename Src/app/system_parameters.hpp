@@ -11,8 +11,17 @@ constexpr double R_l = 0.22; // 半轮距
 constexpr double g   = 9.80665;
 constexpr double Rw  = 0.06; // 轮子半径
 
-constexpr double dt = 0.001; // 执行周期
+constexpr double dt = 0.001;     // 执行周期
 
+// clang-format off
+const Eigen::Matrix<float, 3, 3> IMU_spin_matrix = [] {
+    Eigen::Matrix<float, 3, 3> m;
+    m <<  0, 1, 0, 
+         -1, 0, 0,
+          0, 0, 1;
+    return m;
+}();
+// clang-format on
 enum class chassis_mode : uint8_t {
     stop = 0,
     follow,

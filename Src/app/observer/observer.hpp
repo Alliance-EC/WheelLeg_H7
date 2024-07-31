@@ -4,7 +4,7 @@
 #include "leg_conv_reverse.hpp"
 #include "leg_pos.hpp"
 #include "module/DM8009/DM8009.hpp"
-#include "module/IMU/IMU.hpp"
+#include "module/IMU_EKF/IMU_EKF.hpp"
 #include "tool/daemon/daemon.hpp"
 #include "tool/filter//low_pass_filter.hpp"
 #include "tool/filter/OLS.hpp"

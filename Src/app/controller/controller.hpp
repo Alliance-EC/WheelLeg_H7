@@ -5,6 +5,7 @@
 #include "app/system_parameters.hpp"
 #include "desire_set.hpp"
 #include "device/super_cap/super_cap.hpp"
+#include "module/IMU_EKF/IMU_EKF.hpp"
 #include "module/referee/status.hpp"
 #include "speed_hat.hpp"
 #include "tool/pid/pid.hpp"

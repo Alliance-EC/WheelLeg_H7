@@ -4,7 +4,7 @@
 #include "bsp/dwt/dwt.h"
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "device/RC/remote_control_data.hpp"
-#include "module/IMU/IMU.hpp"
+#include "module/IMU_EKF/IMU_EKF.hpp"
 #include "module/referee/status.hpp"
 #include <Eigen/Dense>
 #include <cmath>

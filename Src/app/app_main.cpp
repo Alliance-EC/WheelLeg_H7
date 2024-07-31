@@ -5,7 +5,8 @@
 #include "device/RC/remote_control.hpp"
 #include "device/super_cap/super_cap.hpp"
 #include "module/DM8009/DM8009.hpp"
-#include "module/IMU/IMU.hpp"
+#include "module/IMU_EKF/IMU_EKF.hpp"
+#include "module/can_comm/can_comm.hpp"
 #include "module/referee/status.hpp"
 #include "observer/observer.hpp"
 #include "system_parameters.hpp"
@@ -36,8 +37,9 @@ static chassis_mode chassis_mode_;
 static volatile double x_states_watch[10];
 void Init() {
     __disable_irq();
-    IMU_instance = new module::IMU(IMU_params(this_board).set_angle_offset({0.0369768739, 0, 0}));
-    RC_instance  = new device::remote_control(RC_params(this_board));
+    IMU_instance = new module::IMU(
+        IMU_params(this_board).set_angle_offset({0, 0, 0}).set_install_spin(IMU_spin_matrix));
+    RC_instance       = new device::remote_control(RC_params(this_board));
     referee_instance  = module::referee::Status::GetInstance();
     supercap_instance = new device::SuperCap(SuperCap_params().set_can_instance(&hfdcan1));
     can_comm_instance = new module::CanComm(CanComm_params().set_can_instance(&hfdcan1));
@@ -79,8 +81,8 @@ void Init() {
 
     observer_instance->Init(IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_);
     desire_instance->Init(
-        &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, &chassis_mode_,
-        referee_instance);
+        &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, DM8009_instance,
+        M3508_instance, &chassis_mode_, referee_instance);
     controller_instance->Init(
         IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_, supercap_instance,
         referee_instance);
