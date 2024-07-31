@@ -23,7 +23,7 @@ public:
         static auto instance = new DesireSet();
         return instance;
     }
-    static constexpr double spinning_velocity = -7.0;
+    static constexpr double spinning_velocity = -8.0;
     static constexpr double x_velocity_scale  = 2.5;
     void update() {
         using namespace device;
@@ -61,7 +61,7 @@ public:
                     *mode_ = chassis_mode::follow;
                 }
             } else if (RC_->switch_right == RC_Switch::UP) {
-                *mode_ = chassis_mode::spin;
+                *mode_ = chassis_mode::spin_control;
             } else {
                 reset_all_controls();
             }
@@ -92,6 +92,9 @@ public:
                 set_states_desire(
                     RC_->joystick_right.x() + keyboard_xmove,
                     RC_->joystick_right.y() + keyboard_ymove);
+                break;
+            case chassis_mode::spin_control:
+                set_states_desire(0, RC_->joystick_right.x() * 6);
                 break;
             default: break;
             }
@@ -179,7 +182,8 @@ private:
             desires.xd(2, 0) =
                 IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle + std::numbers::pi / 2.0);
             break;
-        case chassis_mode::spin: desires.xd(2, 0) += rotation_velocity * dt; break;
+        case chassis_mode::spin:
+        case chassis_mode::spin_control: desires.xd(2, 0) += rotation_velocity * dt; break;
         default: break;
         }
         for (uint8_t i = 3; i < 10; i++) {
