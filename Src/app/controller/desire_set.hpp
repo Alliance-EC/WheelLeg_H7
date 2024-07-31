@@ -108,7 +108,9 @@ public:
 
         } while (false);
         last_switch_right = RC_->switch_right;
-        last_keyboard_    = RC_->keyboard;
+        if (*mode_ == chassis_mode::stop)
+            last_switch_right = RC_Switch::UNKNOWN;
+        last_keyboard_ = RC_->keyboard;
         if (observer_->status_levitate_)
             reset_persistent_data();
     }
