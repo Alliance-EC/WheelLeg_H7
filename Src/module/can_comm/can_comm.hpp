@@ -9,13 +9,13 @@ struct ChassisStates {
     double leg_length_L;
     double leg_length_R;
     app::chassis_mode mode;
-    double chassis_angle;
+    double chassis_relative_angle;
 };
 struct __attribute__((packed)) ChassisStatesPackage {
-    uint16_t leg_length_L;  //*1000
-    uint16_t leg_length_R;  //*1000
+    uint16_t leg_length_L;           //*1000
+    uint16_t leg_length_R;           //*1000
     app::chassis_mode mode;
-    uint16_t chassis_angle; //*100
+    uint16_t chassis_relative_angle; //*100
     uint8_t unused = {};
 };
 struct CanComm_params {
@@ -51,8 +51,8 @@ public:
         data_.leg_length_L = static_cast<uint16_t>(data.leg_length_L * 1000);
         data_.leg_length_R = static_cast<uint16_t>(data.leg_length_R * 1000);
         data_.mode         = data.mode;
-        data_.chassis_angle =
-            static_cast<uint16_t>(normalize_angle_degrees(data.chassis_angle) * 100);
+        data_.chassis_relative_angle =
+            static_cast<uint16_t>(normalize_angle_degrees(data.chassis_relative_angle) * 100);
         can_.Transmit(reinterpret_cast<uint8_t*>(&data_), sizeof(data_));
     }
 
