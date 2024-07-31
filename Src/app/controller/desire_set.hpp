@@ -29,10 +29,12 @@ public:
         using namespace device;
 
         do {
+            motor_alive_detect();
             // 双下/未知状态/底盘云台非全通电
             if ((RC_->switch_left == RC_Switch::UNKNOWN || RC_->switch_right == RC_Switch::UNKNOWN)
                 || ((RC_->switch_left == RC_Switch::DOWN) && (RC_->switch_right == RC_Switch::DOWN))
-                || !(referee_->chassis_power_status && referee_->gimbal_power_status)) {
+                || !(referee_->chassis_power_status && referee_->gimbal_power_status)
+                || !motor_alive_) {
                 reset_all_controls();
                 SuperCap_ON_ = false;
                 *mode_       = chassis_mode::stop;
@@ -113,9 +115,12 @@ public:
         IMU_data_   = IMU_output;
         RC_         = RC;
         GM6020_yaw_ = GM6020_yaw;
+        DM8009_     = DM8009;
+        M3508_      = M3508;
         mode_       = mode;
         referee_    = referee;
     }
+
     void CanLost() { reset_all_controls(); }
 
     desire desires    = {};
@@ -133,7 +138,10 @@ private:
     // rclcpp::TimerBase::SharedPtr rc_watchdog_timer_;
     // InputInterface<msgs::chassis_power> robot_chassis_power_;
 
-    device::DjiMotor* GM6020_yaw_              = nullptr;
+    device::DjiMotor* GM6020_yaw_           = nullptr;
+    std::array<module::DM8009*, 4> DM8009_  = {};
+    std::array<device::DjiMotor*, 2> M3508_ = {};
+
     const device::RC_status* RC_               = nullptr;
     const module::IMU_output_vector* IMU_data_ = nullptr;
     chassis_mode* mode_                        = nullptr;
@@ -143,6 +151,7 @@ private:
     device::RC_Keyboard last_keyboard_  = {};
     device::RC_Switch last_switch_right = {};
     bool balanceless_mode_              = false;
+    bool motor_alive_                   = false;
 
     void set_states_desire(double x_velocity, double rotation_velocity = 0.0) {
         auto x_d_ref              = x_velocity * x_velocity_scale;
@@ -196,6 +205,23 @@ private:
         SuperCap_ON_       = false;
     }
     void reset_persistent_data() { desires.xd(0, 0) = 0; }
+    void motor_alive_detect() {
+        motor_alive_ = false;
+        for (auto motor : M3508_) {
+            if (!motor->get_online_states()) {
+                return;
+            }
+        }
+        for (auto motor : DM8009_) {
+            if (!motor->get_online_states()) {
+                return;
+            }
+        }
+        if (!GM6020_yaw_->get_online_states()) {
+            return;
+        }
+        motor_alive_ = true;
+    }
 };
 
 } // namespace app::controller
