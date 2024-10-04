@@ -1,9 +1,12 @@
 #include "can.hpp"
+#include <tuple>
+#include "tool/tuple_hash.hpp"
 
 namespace bsp {
 // 定义静态成员变量
-std::array<can*, can::MAX_CAN_INSTANCES> can::can_instances_ = {};
-size_t can::can_instance_count_                              = 0;
+std::unordered_map<std::tuple<FDCAN_HandleTypeDef*, uint32_t>, can*, tool::TupleHash>
+    can::can_instances_         = {};
+size_t can::can_instance_count_ = 0;
 
 void CANFIFOxCallback(FDCAN_HandleTypeDef* _hfdcan, uint32_t fifox) {
     static FDCAN_RxHeaderTypeDef rxconf; // 同上

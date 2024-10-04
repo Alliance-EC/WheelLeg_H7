@@ -3,10 +3,13 @@
 #include "bsp/dwt/dwt.h"
 #include "fdcan.h"
 #include "tool/daemon/daemon.hpp"
+#include "tool/tuple_hash.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <tuple>
+
 
 namespace bsp {
 struct can_params {
@@ -22,7 +25,6 @@ public:
         , tx_id_(params.tx_id)
         , rx_id_(params.rx_id)
         , callback_(params.callback) {
-        DuplicateDetect(this);
         Init();
         register_instance(this);
         if (can_instance_count_ == 1) {
@@ -83,10 +85,10 @@ public:
         daemon_.set_callback(callback);
     }
     static can* get_instance(FDCAN_HandleTypeDef* hfdcan, uint32_t rx_id) {
-        for (auto* instance : can_instances_) {
-            if (instance && instance->can_handle_ == hfdcan && instance->rx_id_ == rx_id) {
-                return instance;
-            }
+        auto key = std::make_tuple(hfdcan, rx_id);
+        auto it  = can_instances_.find(key);
+        if (it != can_instances_.end()) {
+            return it->second;
         }
         return nullptr;
     }
@@ -175,31 +177,25 @@ private:
         HAL_FDCAN_ConfigFifoWatermark(&hfdcan3, FDCAN_CFG_RX_FIFO1, 1);
     }
 
-    static constexpr size_t MAX_CAN_INSTANCES = 3 * 8;
-    static std::array<can*, MAX_CAN_INSTANCES> can_instances_;
+    static std::unordered_map<std::tuple<FDCAN_HandleTypeDef*, uint32_t>, can*, tool::TupleHash>
+        can_instances_;
     static size_t can_instance_count_;
 
     static void register_instance(can* instance) {
-        auto it = std::find(can_instances_.begin(), can_instances_.end(), nullptr);
-        if (it != can_instances_.end()) {
-            *it = instance;
-            can_instance_count_++;
-        }
-    }
-    static void unregister_instance(can* instance) {
-        auto it = std::find(can_instances_.begin(), can_instances_.end(), instance);
-        if (it != can_instances_.end()) {
-            *it = nullptr;
-            can_instance_count_--;
-        }
-    }
-    static void DuplicateDetect(can* instance) {
-        for (auto* i : can_instances_) {
-            if (i != instance && instance->rx_id_ != 0 && i->rx_id_ == instance->rx_id_) {
-                while (true)
-                    ; // error: duplicate can id
+        auto key            = std::make_tuple(instance->can_handle_, instance->rx_id_);
+        auto [it, inserted] = can_instances_.insert({key, instance}); // 使用 insert 进行插入
+        if (!inserted) {
+            // 插入失败，说明有重复
+            while (true) {
+                // error: duplicate CAN id
             }
         }
+        can_instance_count_++;
+    }
+    static void unregister_instance(can* instance) {
+        auto key = std::make_tuple(instance->can_handle_, instance->rx_id_);
+        can_instances_.erase(key);
+        can_instance_count_--;
     }
     friend void CANFIFOxCallback(FDCAN_HandleTypeDef* _hfdcan, uint32_t fifox);
 };

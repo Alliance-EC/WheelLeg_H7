@@ -2,7 +2,7 @@
 
 namespace bsp {
 // 定义静态成员变量
-std::array<uart*, uart::MAX_UART_INSTANCES> uart::uart_instances_ = {};
+std::unordered_map<UART_HandleTypeDef*, uart*> uart::uart_instances_ = {};
 } // namespace bsp
 extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t Size) {
     bsp::uart* instance = bsp::uart::get_instance(huart);

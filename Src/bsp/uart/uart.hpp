@@ -1,11 +1,9 @@
 #pragma once
 
 #include "usart.h"
-#include <algorithm>
-#include <array>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <unordered_map>
 
 namespace bsp {
 enum class UART_TRANSFER_MODE : uint8_t {
@@ -79,10 +77,9 @@ public:
     uint8_t* GetRxBuffer() { return rx_buffer_; }
 
     static uart* get_instance(UART_HandleTypeDef* usart_handle) {
-        for (auto* instance : uart_instances_) {
-            if (instance && instance->uart_handle_ == usart_handle) {
-                return instance;
-            }
+        auto it = uart_instances_.find(usart_handle);
+        if (it != uart_instances_.end()) {
+            return it->second;
         }
         return nullptr;
     }
@@ -96,20 +93,13 @@ private:
     uint16_t rx_size_from_register = 0; // 空闲中断返回接收的数据长度
     std::function<void()> callback_;
 
-    static constexpr size_t MAX_UART_INSTANCES = 16;
-    static std::array<uart*, MAX_UART_INSTANCES> uart_instances_;
+    static std::unordered_map<UART_HandleTypeDef*, uart*> uart_instances_;
 
     static void register_instance(uart* instance) {
-        auto it = std::find(uart_instances_.begin(), uart_instances_.end(), nullptr);
-        if (it != uart_instances_.end()) {
-            *it = instance;
-        }
+        uart_instances_[instance->uart_handle_] = instance;
     }
     static void unregister_instance(uart* instance) {
-        auto it = std::find(uart_instances_.begin(), uart_instances_.end(), instance);
-        if (it != uart_instances_.end()) {
-            *it = nullptr;
-        }
+        uart_instances_.erase(instance->uart_handle_);
     }
 };
 } // namespace bsp
