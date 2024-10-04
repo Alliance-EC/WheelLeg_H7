@@ -5,6 +5,7 @@
 #include "app/system_parameters.hpp"
 #include "desire_set.hpp"
 #include "device/super_cap/super_cap.hpp"
+#include "module/IMU_EKF/IMU_EKF.hpp"
 #include "module/referee/status.hpp"
 #include "speed_hat.hpp"
 #include "tool/pid/pid.hpp"
@@ -97,6 +98,13 @@ private:
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = nullptr;
 
+    // Maximum excess power when buffer energy is sufficient.
+    static constexpr double excess_power_limit = 35;
+    //               power_limit_after_buffer_energy_closed_loop =
+    static constexpr double buffer_energy_control_line = 120; // = referee + excess
+    static constexpr double buffer_energy_base_line    = 50;  // = referee
+    static constexpr double buffer_energy_dead_line    = 0;   // = 0
+
     int safe_check() {
         static int mode, last_mode, pitch_count_, leg_angle_count_, count_;
         static double length = 0.12;
@@ -134,20 +142,32 @@ private:
         const auto power                      = referee_->chassis_power_;
         const auto power_level                = referee_->chassis_power_level;
         const auto power_buffer               = referee_->buffer_energy_;
-        /*超功率调低超电充电等级,否则发送正常功率等级*/
-        SuperCap_set_.power_level = power >= power_limit ? 0 : power_level;
+
+        double power_limit_after_buffer_energy_closed_loop =
+            power_limit
+                * std::clamp(
+                    (power_buffer - buffer_energy_dead_line)
+                        / (buffer_energy_base_line - buffer_energy_dead_line),
+                    0.0, 1.0)
+            + excess_power_limit
+                  * std::clamp(
+                      (power_buffer - buffer_energy_base_line)
+                          / (buffer_energy_control_line - buffer_energy_base_line),
+                      0.0, 1.0);
+        SuperCap_set_.power_limit =
+            static_cast<uint8_t>(power_limit_after_buffer_energy_closed_loop);
         /*超电自动开启后在缓冲能量充满时关闭，操作手按键开启的则不会自动关闭*/
         if ((power > power_limit) && (power_buffer / (power - power_limit) < 0.3)) {
-            SuperCap_set_.control_ON = true;
+            SuperCap_set_.enable = true;
         } else if (power_buffer >= 60.0) {
-            SuperCap_set_.control_ON = false;
+            SuperCap_set_.enable = false;
         }
 
         if (desire_->SuperCap_ON_) {
-            SuperCap_set_.control_ON = true;
+            SuperCap_set_.enable = true;
         }
-        if (SuperCap_->Info.voltage < 12.0) {
-            SuperCap_set_.control_ON = false;
+        if (SuperCap_->Info.supercap_voltage_ < 12.0) {
+            SuperCap_set_.enable = false;
         }
         SuperCap_->write_data(SuperCap_set_);
     }
@@ -157,10 +177,15 @@ private:
         Eigen::Map<Eigen::Matrix<double, 4, 10, Eigen::ColMajor>> LQR_gain(lqr_k);
 
         Eigen::Matrix<double, 10, 1> e_mat = -1.0 * (*xd_ - *x_states_);
-        // if (*status_levitate_) {
-        //     e_mat(0, 0) = 0;
-        //     e_mat(1, 0) = 0;
-        // }
+        if (observer_->status_levitate_) { // 腾空状态仅保持腿部竖直
+            e_mat(0, 0) = 0;
+            e_mat(1, 0) = 0;
+            e_mat(2, 0) = 0;
+            e_mat(3, 0) = 0;
+
+            e_mat(8, 0) = 0;
+            e_mat(9, 0) = 0;
+        }
         auto u_mat = LQR_gain * e_mat;
         T_lwl_     = u_mat(0, 0);
         T_lwr_     = u_mat(1, 0);
@@ -178,9 +203,8 @@ private:
             // return 0;
         };
 
-        auto length_desire = *length_desire_;
-        // auto roll_desire                     = *status_levitate_ ? 0.0 : *roll_desire_;
-        auto roll_desire = *roll_desire_;
+        auto length_desire = observer_->status_levitate_ ? 0.3 : *length_desire_;
+        auto roll_desire   = observer_->status_levitate_ ? 0.0 : *roll_desire_;
 
         /*roll和腿长PID运算*/
         auto F_length = pid_length_.update(length_desire, length);

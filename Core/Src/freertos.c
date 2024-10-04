@@ -61,6 +61,13 @@ const osThreadAttr_t main_task_attributes = {
   .stack_size = 4096 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
+/* Definitions for comm_task */
+osThreadId_t comm_taskHandle;
+const osThreadAttr_t comm_task_attributes = {
+  .name = "comm_task",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -69,6 +76,7 @@ const osThreadAttr_t main_task_attributes = {
 
 void StartDefaultTask(void *argument);
 void main_task_func(void *argument);
+void comm_task_func(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -105,6 +113,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of main_task */
   main_taskHandle = osThreadNew(main_task_func, NULL, &main_task_attributes);
+
+  /* creation of comm_task */
+  comm_taskHandle = osThreadNew(comm_task_func, NULL, &comm_task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -152,6 +163,24 @@ __weak void main_task_func(void *argument)
     osDelay(1);
   }
   /* USER CODE END main_task_func */
+}
+
+/* USER CODE BEGIN Header_comm_task_func */
+/**
+* @brief Function implementing the comm_task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_comm_task_func */
+__weak void comm_task_func(void *argument)
+{
+  /* USER CODE BEGIN comm_task_func */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END comm_task_func */
 }
 
 /* Private application code --------------------------------------------------*/

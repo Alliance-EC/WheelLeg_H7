@@ -3,7 +3,7 @@
 #include "controller.hpp"
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "module/DM8009/DM8009.hpp"
-#include "tool/PID/PID.hpp"
+#include "tool/pid/pid.hpp"
 
 namespace app::controller {
 class SendProcess {

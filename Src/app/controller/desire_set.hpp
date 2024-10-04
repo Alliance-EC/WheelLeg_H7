@@ -1,9 +1,10 @@
 #pragma once
+#include "app/observer/observer.hpp"
 #include "app/system_parameters.hpp"
 #include "bsp/dwt/dwt.h"
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "device/RC/remote_control_data.hpp"
-#include "module/IMU/IMU.hpp"
+#include "module/IMU_EKF/IMU_EKF.hpp"
 #include "module/referee/status.hpp"
 #include <Eigen/Dense>
 #include <cmath>
@@ -22,24 +23,24 @@ public:
         static auto instance = new DesireSet();
         return instance;
     }
-    static constexpr double spinning_velocity = -7.0;
+    static constexpr double spinning_velocity = -8.0;
     static constexpr double x_velocity_scale  = 2.5;
     void update() {
         using namespace device;
 
         do {
+            motor_alive_detect();
             // 双下/未知状态/底盘云台非全通电
             if ((RC_->switch_left == RC_Switch::UNKNOWN || RC_->switch_right == RC_Switch::UNKNOWN)
                 || ((RC_->switch_left == RC_Switch::DOWN) && (RC_->switch_right == RC_Switch::DOWN))
-                || !(referee_->chassis_power_status && referee_->gimbal_power_status)) {
+                || !(referee_->chassis_power_status && referee_->gimbal_power_status)
+                || !motor_alive_) {
                 reset_all_controls();
                 SuperCap_ON_ = false;
                 *mode_       = chassis_mode::stop;
                 break;
             }
 
-            balanceless_mode_ |= RC_->keyboard.r;
-            balanceless_mode_ &= !(RC_->keyboard.ctrl && RC_->keyboard.r);
             if (((RC_->switch_left == RC_Switch::MIDDLE) && (RC_->switch_right == RC_Switch::DOWN))
                 || balanceless_mode_) {
                 reset_all_controls();
@@ -48,6 +49,8 @@ public:
                 if (!last_keyboard_.c && RC_->keyboard.c) {
                     *mode_ =
                         *mode_ == chassis_mode::spin ? chassis_mode::follow : chassis_mode::spin;
+                } else if (!last_keyboard_.r && RC_->keyboard.r) {
+                    balanceless_mode_ = !balanceless_mode_;
                 } else if (RC_->keyboard.a || RC_->keyboard.d) {
                     if (*mode_ != chassis_mode::sideways_L && *mode_ != chassis_mode::sideways_R)
                         *mode_ =
@@ -58,7 +61,7 @@ public:
                     *mode_ = chassis_mode::follow;
                 }
             } else if (RC_->switch_right == RC_Switch::UP) {
-                *mode_ = chassis_mode::spin;
+                *mode_ = chassis_mode::spin_control;
             } else {
                 reset_all_controls();
             }
@@ -90,6 +93,9 @@ public:
                     RC_->joystick_right.x() + keyboard_xmove,
                     RC_->joystick_right.y() + keyboard_ymove);
                 break;
+            case chassis_mode::spin_control:
+                set_states_desire(0, RC_->joystick_right.x() * 6);
+                break;
             default: break;
             }
 
@@ -102,7 +108,11 @@ public:
 
         } while (false);
         last_switch_right = RC_->switch_right;
-        last_keyboard_    = RC_->keyboard;
+        if (*mode_ == chassis_mode::stop)
+            last_switch_right = RC_Switch::UNKNOWN;
+        last_keyboard_ = RC_->keyboard;
+        if (observer_->status_levitate_)
+            reset_persistent_data();
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
@@ -110,9 +120,12 @@ public:
         IMU_data_   = IMU_output;
         RC_         = RC;
         GM6020_yaw_ = GM6020_yaw;
+        DM8009_     = DM8009;
+        M3508_      = M3508;
         mode_       = mode;
         referee_    = referee;
     }
+
     void CanLost() { reset_all_controls(); }
 
     desire desires    = {};
@@ -130,15 +143,20 @@ private:
     // rclcpp::TimerBase::SharedPtr rc_watchdog_timer_;
     // InputInterface<msgs::chassis_power> robot_chassis_power_;
 
-    device::DjiMotor* GM6020_yaw_              = nullptr;
+    device::DjiMotor* GM6020_yaw_           = nullptr;
+    std::array<module::DM8009*, 4> DM8009_  = {};
+    std::array<device::DjiMotor*, 2> M3508_ = {};
+
     const device::RC_status* RC_               = nullptr;
     const module::IMU_output_vector* IMU_data_ = nullptr;
     chassis_mode* mode_                        = nullptr;
     module::referee::Status* referee_          = nullptr;
+    observer::observer* observer_              = observer::observer::GetInstance();
 
     device::RC_Keyboard last_keyboard_  = {};
     device::RC_Switch last_switch_right = {};
     bool balanceless_mode_              = false;
+    bool motor_alive_                   = false;
 
     void set_states_desire(double x_velocity, double rotation_velocity = 0.0) {
         auto x_d_ref              = x_velocity * x_velocity_scale;
@@ -166,7 +184,8 @@ private:
             desires.xd(2, 0) =
                 IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle + std::numbers::pi / 2.0);
             break;
-        case chassis_mode::spin: desires.xd(2, 0) += rotation_velocity * dt; break;
+        case chassis_mode::spin:
+        case chassis_mode::spin_control: desires.xd(2, 0) += rotation_velocity * dt; break;
         default: break;
         }
         for (uint8_t i = 3; i < 10; i++) {
@@ -190,6 +209,24 @@ private:
         desires.leg_length = 0.12;
         *mode_             = chassis_mode::stop;
         SuperCap_ON_       = false;
+    }
+    void reset_persistent_data() { desires.xd(0, 0) = 0; }
+    void motor_alive_detect() {
+        motor_alive_ = false;
+        for (auto motor : M3508_) {
+            if (!motor->get_online_states()) {
+                return;
+            }
+        }
+        for (auto motor : DM8009_) {
+            if (!motor->get_online_states()) {
+                return;
+            }
+        }
+        if (!GM6020_yaw_->get_online_states()) {
+            return;
+        }
+        motor_alive_ = true;
     }
 };
 

@@ -62,6 +62,7 @@ public:
         : can_(params.can_params)
         , callback_(params.callback) {
         can_.SetCallback(std::bind(&DjiMotor::Decode, this));
+        can_.SetOfflineCallback(std::bind(&DjiMotor::offline_callback, this));
         encoder_zero_point_       = 0;
         last_raw_angle_           = 0;
         multi_turn_angle_enabled_ = false;
@@ -123,7 +124,8 @@ public:
             sign * config.reduction_ratio * torque_constant / raw_current_max * current_max;
         torque_to_raw_current_coefficient_ = 1 / raw_current_to_torque_coefficient_;
         if (config.motor_type == DjiMotorType::DM8009)
-            raw_current_to_torque_coefficient_ = sign * torque_constant / 1000; // feedback unit:mA
+            raw_current_to_torque_coefficient_ =
+                sign * torque_constant * 0.8 / 1000;             // feedback unit:mA
 
         reduction_ratio_ = config.reduction_ratio;
         max_torque_      = 1 * config.reduction_ratio * torque_constant * current_max;
@@ -160,6 +162,11 @@ public:
         torque_ = raw_current_to_torque_coefficient_ * static_cast<double>(raw_data_.current);
 
         last_raw_angle_ = raw_angle;
+
+        IsOnline = true;
+
+        if (callback_)
+            callback_();
     }
     void SetOfflineCallback(const std::function<void()>& callback) {
         can_.SetOfflineCallback(callback);
@@ -185,6 +192,7 @@ public:
         default: return 0;
         }
     }
+    [[nodiscard]] bool get_online_states() const { return IsOnline; }
 
 private:
     bsp::can can_;
@@ -209,22 +217,27 @@ private:
     DjiMotorType motor_type_;
     DjiMotorFeedback raw_data_;
 
+    bool IsOnline = false;
+
+    void offline_callback() { IsOnline = false; }
+
     friend class DjiMotor_sender;
 };
 class DjiMotor_sender {
 public:
     explicit DjiMotor_sender(const DjiMotor_params& params)
         : can_(params.can_params) {}
-    void write_command(DjiMotor* motor, double torque) {
+    double write_command(DjiMotor* motor, double torque) {
         if (std::isnan(torque)) {
             data_.current[motor->get_index()] = 0;
-            return;
+            return 0;
         }
         double max_torque = motor->get_max_torque();
         torque            = std::clamp(torque, -max_torque, max_torque);
 
         double current = std::round(motor->torque_to_raw_current_coefficient_ * torque);
         data_.current[motor->get_index()] = static_cast<short>(current);
+        return current;
     }
     void send() {
         // can_.SetDLC(sizeof(DjiMotorControl));

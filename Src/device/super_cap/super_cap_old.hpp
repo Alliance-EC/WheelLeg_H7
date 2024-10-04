@@ -4,23 +4,28 @@
 #include <cstdint>
 
 namespace device {
-struct __attribute__((packed)) SuperCapFeedback {
-    uint16_t chassis_power;
-    uint16_t supercap_voltage;
-    uint16_t chassis_voltage;
-    uint8_t enabled;
-    uint8_t unused;
+enum class watchdog_state : uint8_t {
+    on = 1,
+    off,
+    feed_dog,
+};
+struct __attribute__((packed)) SuperCapFeedback {          // 50Hz
+    float voltage;
+    bool status;
+    bool CtrlBoard_status;
+    uint8_t unused[2];
 };
 struct __attribute__((packed)) SuperCapControl {
-    uint8_t placeholder[6] = {};
-    uint8_t power_limit;
-    bool enable;
+    bool control_ON = false;
+    uint8_t power_level;                                   // 0-10
+    uint8_t power_remain           = 1;                    // 暂时用不到
+    watchdog_state watchdog_states = watchdog_state::off;
+    uint8_t unused[4]              = {};
 };
 struct SuperCapInfo {
-    double chassis_power_;
-    double chassis_voltage_;
-    double supercap_voltage_;
-    bool enabled_;
+    float voltage = 0;
+    bool status   = false;
+    bool CtrlBoard_status;
 };
 struct SuperCap_params {
     bsp::can_params can_params     = {};
@@ -46,27 +51,21 @@ public:
     void Decode() {
         SuperCapFeedback data;
         can_.GetRxData(reinterpret_cast<uint8_t*>(&data));
-        Info.chassis_power_    = uint_to_double(data.chassis_power, 0.0, 500.0);
-        Info.chassis_voltage_  = uint_to_double(data.chassis_voltage, 0.0, 50.0);
-        Info.supercap_voltage_ = uint_to_double(data.supercap_voltage, 0.0, 50.0);
-        Info.enabled_          = data.enabled;
+        Info.voltage          = data.voltage;
+        Info.status           = !data.status;              // 协议中取反
+        Info.CtrlBoard_status = data.CtrlBoard_status;
         can_.Transmit(reinterpret_cast<uint8_t*>(&data_)); // 接收到数据后立即发送数据
     }
-    void write_data(bool enabled, uint8_t power_limit) {
-        data_.enable      = enabled;
-        data_.power_limit = power_limit;
+    void write_data(bool control_ON, uint8_t voltage_level, uint8_t power_remain) {
+        data_.control_ON   = control_ON;
+        data_.power_level  = voltage_level;
+        data_.power_remain = power_remain;
     }
     void write_data(const SuperCapControl& data) { data_ = data; }
 
     SuperCapInfo Info = {};
 
 private:
-    static constexpr double
-        uint_to_double(std::unsigned_integral auto value, double min, double max) {
-        double span   = max - min;
-        double offset = min;
-        return (double)value / (double)decltype(value)(-1) * span + offset;
-    }
     bsp::can can_;
     std::function<void()> callback_ = nullptr;
     SuperCapControl data_;

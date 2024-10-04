@@ -1,12 +1,14 @@
 #pragma once
-#include "AHRS.h"
-#include "app/system_parameters.hpp"
-#include "bsp/dwt/dwt.h"
-#include "device/BMI088/BMI088.hpp"
-#include <Eigen/Dense>
-#include <cmath>
-#include <cstdint>
-#include <utility>
+#ifndef USE_IMU_EKF
+
+# include "AHRS.h"
+# include "app/system_parameters.hpp"
+# include "bsp/dwt/dwt.h"
+# include "device/BMI088/BMI088.hpp"
+# include <Eigen/Dense>
+# include <cmath>
+# include <cstdint>
+# include <utility>
 
 namespace module {
 struct IMU_output_vector {
@@ -82,18 +84,18 @@ public:
     explicit IMU(const IMU_params& params)
         : bmi088_(params.bmi088_params)
         , callback_(params.callback)
-        , angle_offset(params.angle_offset) {
+        , angle_offset_(params.angle_offset) {
         bmi088_.SetCallback(std::bind(&IMU::update, this));
-        gyro_offset = bmi088_.GetGyroOffset();
+        gyro_offset_ = bmi088_.GetGyroOffset();
 
         device::BMI088_Data raw_data;
         bmi088_.Acquire(&raw_data);
         cali_slove(&raw_data);
-        AHRS_init(INS_data_.quat, INS_data_.accel, INS_data_.mag);
+        AHRS_init(IMU_data_.quat, IMU_data_.accel, IMU_data_.mag);
 
-        accel_fliter_1[0] = accel_fliter_2[0] = accel_fliter_3[0] = INS_data_.accel[0];
-        accel_fliter_1[1] = accel_fliter_2[1] = accel_fliter_3[1] = INS_data_.accel[1];
-        accel_fliter_1[2] = accel_fliter_2[2] = accel_fliter_3[2] = INS_data_.accel[2];
+        accel_fliter_1[0] = accel_fliter_2[0] = accel_fliter_3[0] = IMU_data_.accel[0];
+        accel_fliter_1[1] = accel_fliter_2[1] = accel_fliter_3[1] = IMU_data_.accel[1];
+        accel_fliter_1[2] = accel_fliter_2[2] = accel_fliter_3[2] = IMU_data_.accel[2];
     }
     bool Acquire(IMU_output* output = nullptr) {
         if (bmi088_.GetWorkMode() == device::BMI088_Work_Mode::BLOCK_PERIODIC_MODE) {
@@ -107,10 +109,10 @@ public:
         return AHRS_ready_;
     }
     [[nodiscard]] Eigen::Vector3f get_gyro() const {
-        return {INS_data_.gyro[0], INS_data_.gyro[1], INS_data_.gyro[2]};
+        return {IMU_data_.gyro[0], IMU_data_.gyro[1], IMU_data_.gyro[2]};
     }
     [[nodiscard]] Eigen::Vector3f get_accel() const {
-        return {INS_data_.accel[0], INS_data_.accel[1], INS_data_.accel[2]};
+        return {IMU_data_.accel[0], IMU_data_.accel[1], IMU_data_.accel[2]};
     }
     [[nodiscard]] Eigen::Vector3f get_euler_angle() const {
         return {INS_output_.euler_angle[0], INS_output_.euler_angle[1], INS_output_.euler_angle[2]};
@@ -127,19 +129,19 @@ public:
     IMU_output_vector output_vector;
 
 private:
-    float timing_time; // 任务运行的时间 单位 s
+    float dt; // 任务运行的时间 单位 s
     float accel_fliter_1[3]              = {0.0f, 0.0f, 0.0f};
     float accel_fliter_2[3]              = {0.0f, 0.0f, 0.0f};
     float accel_fliter_3[3]              = {0.0f, 0.0f, 0.0f};
     static constexpr float fliter_num[3] = {
         1.929454039488895f, -0.93178349823448126f, 0.002329458745586203f};
 
-    Eigen::Vector3f gyro_offset  = {0.0f, 0.0f, 0.0f};
-    Eigen::Vector3f accel_offset = {0.0f, 0.0f, 0.0f};
+    Eigen::Vector3f gyro_offset_  = {0.0f, 0.0f, 0.0f};
+    Eigen::Vector3f accel_offset_ = {0.0f, 0.0f, 0.0f};
 
 // Fucking shit ，waiting C++ Matrix
-#define BMI088_BOARD_INSTALL_SPIN_MATRIX \
-    {0.0f, 1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, { 0.0f, 0.0f, 1.0f }
+# define BMI088_BOARD_INSTALL_SPIN_MATRIX \
+     {0.0f, 1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, { 0.0f, 0.0f, 1.0f }
 
     float gyro_scale_factor[3][3]  = {BMI088_BOARD_INSTALL_SPIN_MATRIX};
     float accel_scale_factor[3][3] = {BMI088_BOARD_INSTALL_SPIN_MATRIX};
@@ -148,23 +150,23 @@ private:
     static constexpr uint8_t INS_PITCH_ADDRESS_OFFSET = 1; // 陀螺仪数据相较于云台的pitch的方向
     static constexpr uint8_t INS_ROLL_ADDRESS_OFFSET = 0; // 陀螺仪数据相较于云台的roll的方向
 
-    IMU_data INS_data_ = {};
+    IMU_data IMU_data_ = {};
     device::bmi088 bmi088_;
     std::function<void()> callback_ = nullptr;
-    Eigen::Vector3f angle_offset    = {0.0f, 0.0f, 0.0f};
+    Eigen::Vector3f angle_offset_   = {0.0f, 0.0f, 0.0f};
     IMU_output INS_output_;
     bool AHRS_ready_ = false;
 
     //@brief 旋转陀螺仪,加速度计和磁力计,并计算零漂,因为设备有不同安装方式
     void cali_slove(device::BMI088_Data* data) {
         for (uint8_t i = 0; i < 3; i++) {
-            INS_data_.gyro[i] = data->gyro[0] * gyro_scale_factor[i][0]
+            IMU_data_.gyro[i] = data->gyro[0] * gyro_scale_factor[i][0]
                               + data->gyro[1] * gyro_scale_factor[i][1]
-                              + data->gyro[2] * gyro_scale_factor[i][2] + gyro_offset[i];
-            INS_data_.accel[i] = data->acc[0] * accel_scale_factor[i][0]
+                              + data->gyro[2] * gyro_scale_factor[i][2] + gyro_offset_[i];
+            IMU_data_.accel[i] = data->acc[0] * accel_scale_factor[i][0]
                                + data->acc[1] * accel_scale_factor[i][1]
-                               + data->acc[2] * accel_scale_factor[i][2] + accel_offset[i];
-            INS_data_.mag[i] = 0; // 不使用磁力计
+                               + data->acc[2] * accel_scale_factor[i][2] + accel_offset_[i];
+            IMU_data_.mag[i] = 0; // 不使用磁力计
         }
     }
     void update() {
@@ -177,30 +179,30 @@ private:
 
             accel_fliter_3[0] = accel_fliter_2[0] * fliter_num[0]
                               + accel_fliter_1[0] * fliter_num[1]
-                              + INS_data_.accel[0] * fliter_num[2];
+                              + IMU_data_.accel[0] * fliter_num[2];
 
             accel_fliter_1[1] = accel_fliter_2[1];
             accel_fliter_2[1] = accel_fliter_3[1];
 
             accel_fliter_3[1] = accel_fliter_2[1] * fliter_num[0]
                               + accel_fliter_1[1] * fliter_num[1]
-                              + INS_data_.accel[1] * fliter_num[2];
+                              + IMU_data_.accel[1] * fliter_num[2];
 
             accel_fliter_1[2] = accel_fliter_2[2];
             accel_fliter_2[2] = accel_fliter_3[2];
 
             accel_fliter_3[2] = accel_fliter_2[2] * fliter_num[0]
                               + accel_fliter_1[2] * fliter_num[1]
-                              + INS_data_.accel[2] * fliter_num[2];
+                              + IMU_data_.accel[2] * fliter_num[2];
 
-            timing_time = DWT_GetDeltaT(&bmi088_.bias_dwt_cnt);
-            AHRS_update(INS_data_.quat, timing_time, INS_data_.gyro, accel_fliter_3, INS_data_.mag);
+            dt = DWT_GetDeltaT(&bmi088_.bias_dwt_cnt);
+            AHRS_update(IMU_data_.quat, dt, IMU_data_.gyro, accel_fliter_3, IMU_data_.mag);
             get_angle(
-                INS_data_.quat, &INS_output_.euler_angle[INS_YAW_ADDRESS_OFFSET],
+                IMU_data_.quat, &INS_output_.euler_angle[INS_YAW_ADDRESS_OFFSET],
                 &INS_output_.euler_angle[INS_PITCH_ADDRESS_OFFSET],
                 &INS_output_.euler_angle[INS_ROLL_ADDRESS_OFFSET]);
             for (uint8_t i = 0; i < 3; i++) {
-                INS_output_.euler_angle[i] += angle_offset[i];
+                INS_output_.euler_angle[i] += angle_offset_[i];
             }
 
             // get Yaw total, yaw数据可能会超过360,处理一下方便其他功能使用(如小陀螺)
@@ -227,3 +229,4 @@ private:
     }
 };
 } // namespace module
+#endif

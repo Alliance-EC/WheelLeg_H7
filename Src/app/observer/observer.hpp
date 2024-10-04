@@ -4,7 +4,8 @@
 #include "leg_conv_reverse.hpp"
 #include "leg_pos.hpp"
 #include "module/DM8009/DM8009.hpp"
-#include "module/IMU/IMU.hpp"
+#include "module/IMU_EKF/IMU_EKF.hpp"
+#include "tool/daemon/daemon.hpp"
 #include "tool/filter//low_pass_filter.hpp"
 #include "tool/filter/OLS.hpp"
 #include <Eigen/Dense>
@@ -33,9 +34,9 @@ public:
         IMU_update();
         leg_update();
         wheel_update();
-
         support_force_update();
-        // levitate_detect();
+        levitate_detect();
+
         if ((*chassis_mode_ == chassis_mode::stop)
             || (*chassis_mode_ == chassis_mode::balanceless)) {
             reset_persistent_data();
@@ -81,8 +82,6 @@ private:
     static constexpr double inf = std::numeric_limits<double>::infinity();
     static constexpr double nan = std::numeric_limits<double>::quiet_NaN();
 
-    // rclcpp::TimerBase::SharedPtr timer_observer_;
-
     double angle_L_ = 0, angle_Ld_ = 0;
     double angle_R_ = 0, angle_Rd_ = 0;
     double velocity_ = 0.0, distance = 0.0;
@@ -91,10 +90,12 @@ private:
     std::array<module::DM8009*, 4> DM8009_  = {};
     std::array<device::DjiMotor*, 2> M3508_ = {};
     const chassis_mode* chassis_mode_       = nullptr; // 设为指针以便在外部修改
+    tool::daemon levitate_allow_timer_ =
+        tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
 
-    uint32_t dwt_count_ = 0;
-    double dt_          = 0.0;
-    // bool allow_levitate_ = true;
+    uint32_t dwt_count_               = 0;
+    double dt_                        = 0.0;
+    bool allow_levitate_              = true;
     const Eigen::Vector3f *imu_accel_ = nullptr, *imu_gyro_ = nullptr, *imu_euler_ = nullptr;
 
     tool::filter::LowPassFilter angle_L_LPF_  = tool::filter::LowPassFilter(100);
@@ -168,11 +169,33 @@ private:
         auto P_r         = F_r * std::cos(angle_R_) + T_r * std::sin(angle_R_) / leg_length_.R;
         support_force_.R = P_r;
     }
+    void levitate_detect() {
+        constexpr double force_levitate = 20.0;
+        constexpr double force_normal   = 50.0;
+        auto support_force_avg          = (support_force_.L + support_force_.R) / 2.0;
+        if ((support_force_avg < force_levitate) && allow_levitate_
+            && (*chassis_mode_ != chassis_mode::stop)
+            && (*chassis_mode_ != chassis_mode::balanceless) && (leg_length_avg_ > 0.25)) {
+            status_levitate_ = true;
+        } else if (
+            (support_force_avg > force_normal) || *chassis_mode_ != chassis_mode::stop
+            || *chassis_mode_ != chassis_mode::balanceless) {
+            if (status_levitate_ == true) {
+                allow_levitate_ = false;
+                levitate_allow_timer_.reload();
+            }
+            status_levitate_ = false;
+        }
+
+        if (status_levitate_)
+            reset_persistent_data();
+    }
     void reset_persistent_data() {
         distance = 0;
         for (auto& i : M3508_)
             i->reset_angle();
     }
+    void reset_levitate_allowance() { allow_levitate_ = true; }
 };
 
 } // namespace app::observer
