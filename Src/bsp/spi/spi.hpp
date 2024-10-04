@@ -1,9 +1,7 @@
 #pragma once
 #include "spi.h"
 #include "stm32h7xx_hal_gpio.h"
-#include <algorithm>
-#include <array>
-#include <cstddef>
+#include <unordered_map>
 #include <cstdint>
 #include <functional>
 
@@ -117,13 +115,9 @@ public:
     }
     void SetCallback(const std::function<void()>& callback) { callback_ = callback; }
     static spi* get_instance(SPI_HandleTypeDef* hspi) {
-        for (auto* instance : spi_instances_) {
-            if (instance && instance->spi_handle_ == hspi) {
-                if (HAL_GPIO_ReadPin(instance->GPIOx_, instance->cs_pin_) == GPIO_PIN_RESET) {
-                    HAL_GPIO_WritePin(instance->GPIOx_, instance->cs_pin_, GPIO_PIN_SET);
-                    return instance;
-                }
-            }
+        auto it = spi_instances_.find(hspi);
+        if (it != spi_instances_.end()) {
+            return it->second;
         }
         return nullptr;
     }
@@ -137,21 +131,14 @@ private:
     uint8_t* rx_buffer_ = nullptr;     // 本次接收的数据缓冲区
     std::function<void()> callback_;
 
-    static constexpr size_t MAX_SPI_INSTANCES = 10;
-    static std::array<spi*, MAX_SPI_INSTANCES> spi_instances_;
+    static std::unordered_map<SPI_HandleTypeDef*, spi*> spi_instances_;
 
     static void register_instance(spi* instance) {
-        auto it = std::find(spi_instances_.begin(), spi_instances_.end(), nullptr);
-        if (it != spi_instances_.end()) {
-            *it = instance;
-        }
+        spi_instances_[instance->spi_handle_] = instance;
     }
 
     static void unregister_instance(spi* instance) {
-        auto it = std::find(spi_instances_.begin(), spi_instances_.end(), instance);
-        if (it != spi_instances_.end()) {
-            *it = nullptr;
-        }
+        spi_instances_.erase(instance->spi_handle_);
     }
 
     friend void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi);

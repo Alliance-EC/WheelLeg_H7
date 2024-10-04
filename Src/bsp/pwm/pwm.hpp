@@ -1,9 +1,10 @@
 #pragma once
 #include "tim.h"
-#include <algorithm>
-#include <array>
-#include <cstddef>
+#include "tool/tuple_hash.hpp"
 #include <functional>
+#include <unordered_map>
+#include <utility>
+
 
 namespace bsp {
 struct pwm_params {
@@ -52,10 +53,9 @@ public:
     }
     void SetCallback(const std::function<void()>& callback) { callback_ = callback; }
     static pwm* get_instance(TIM_HandleTypeDef* htim, uint32_t channel) {
-        for (auto* instance : pwm_instances_) {
-            if (instance && instance->htim_ == htim && instance->channel_ == channel) {
-                return instance;
-            }
+        auto key = std::make_tuple(htim, channel);
+        if (pwm_instances_.find(key) != pwm_instances_.end()) {
+            return pwm_instances_[key];
         }
         return nullptr;
     }
@@ -91,20 +91,16 @@ private:
         return 0;
     }
 
-    static constexpr size_t MAX_PWM_INSTANCES = 16;
-    static std::array<pwm*, MAX_PWM_INSTANCES> pwm_instances_;
+    static std::unordered_map<std::tuple<TIM_HandleTypeDef*, uint32_t>, pwm*, tool::TupleHash>
+        pwm_instances_;
 
     static void register_instance(pwm* instance) {
-        auto it = std::find(pwm_instances_.begin(), pwm_instances_.end(), nullptr);
-        if (it != pwm_instances_.end()) {
-            *it = instance;
-        }
+        auto key            = std::make_tuple(instance->htim_, instance->channel_);
+        pwm_instances_[key] = instance;
     }
     static void unregister_instance(pwm* instance) {
-        auto it = std::find(pwm_instances_.begin(), pwm_instances_.end(), instance);
-        if (it != pwm_instances_.end()) {
-            *it = nullptr;
-        }
+        auto key = std::make_tuple(instance->htim_, instance->channel_);
+        pwm_instances_.erase(key);
     }
     friend void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef* htim);
 };

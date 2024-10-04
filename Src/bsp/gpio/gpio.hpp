@@ -48,10 +48,9 @@ public:
     }
     void SetCallback(const std::function<void()>& callback) { callback_ = callback; }
     static gpio* get_instance(uint16_t GPIO_Pin) {
-        for (auto* instance : gpio_instances_) {
-            if (instance && instance->GPIO_Pin_ == GPIO_Pin) {
-                return instance;
-            }
+        auto it = gpio_instances_.find(GPIO_Pin);
+        if (it != gpio_instances_.end()) {
+            return it->second;
         }
         return nullptr;
     }
@@ -63,21 +62,14 @@ private:
     uint16_t GPIO_Pin_;           // 引脚号,
     std::function<void()> callback_;
 
-    static constexpr size_t MAX_GPIO_INSTANCES = 16;
-    static std::array<gpio*, MAX_GPIO_INSTANCES> gpio_instances_;
+    static std::unordered_map<uint16_t, gpio*> gpio_instances_;
 
     static void register_instance(gpio* instance) {
-        auto it = std::find(gpio_instances_.begin(), gpio_instances_.end(), nullptr);
-        if (it != gpio_instances_.end()) {
-            *it = instance;
-        }
+        gpio_instances_[instance->GPIO_Pin_] = instance;
     }
 
     static void unregister_instance(gpio* instance) {
-        auto it = std::find(gpio_instances_.begin(), gpio_instances_.end(), instance);
-        if (it != gpio_instances_.end()) {
-            *it = nullptr;
-        }
+        gpio_instances_.erase(instance->GPIO_Pin_);
     }
 
     friend void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
