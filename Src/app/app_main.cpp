@@ -35,6 +35,9 @@ static auto sender_instance     = controller::SendProcess::GetInstance();
 static chassis_mode chassis_mode_;
 
 static volatile double x_states_watch[10];
+static volatile double x_desire_watch[10];
+static volatile double wheel_speed_watch[2] = {};
+// static volatile int dm8009_encoder_watch[4] = {};
 void Init() {
     __disable_irq();
     IMU_instance = new module::IMU(
@@ -47,15 +50,11 @@ void Init() {
     for (uint8_t i = 0; i < 2; ++i) {
         M3508_instance[i] = new device::DjiMotor(
             DjiMotor_params().set_can_instance(&hfdcan2).set_rx_id(toU32(M3508_ID::ID1) + i));
-        M3508_instance[i]->SetOfflineCallback(
-            std::bind(&controller::DesireSet::CanLost, desire_instance));
     }
     for (uint8_t i = 0; i < 4; ++i) {
         auto params = module::DM8009_params();
         params.Dji_common.set_can_instance(&hfdcan3).set_rx_id(toU32(DM8009_ID::ID1) + i);
         DM8009_instance[i] = new module::DM8009(params);
-        DM8009_instance[i]->SetOfflineCallback(
-            std::bind(&controller::DesireSet::CanLost, desire_instance));
     }
     GM6020_yaw_instance = new device::DjiMotor(
         DjiMotor_params().set_can_instance(&hfdcan1).set_rx_id(toU32(GM6020_ID::ID1)));
@@ -71,21 +70,22 @@ void Init() {
     M3508_instance[1]->configure(M3508_config);
     M3508_instance[0]->configure(M3508_config.reverse()); // 顺序不要变
 
-    DM8009_instance[0]->configure(6437, true);
-    DM8009_instance[1]->configure(2615, true);
-    DM8009_instance[2]->configure(1794);
-    DM8009_instance[3]->configure(131);
+    DM8009_instance[0]->configure(6466, true);
+    DM8009_instance[1]->configure(7954, true);
+    DM8009_instance[2]->configure(1781);
+    DM8009_instance[3]->configure(149);
 
     GM6020_yaw_instance->configure(
-        device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(676));
+        device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(7817));
 
-    observer_instance->Init(IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_);
     desire_instance->Init(
         &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, DM8009_instance,
-        M3508_instance, &chassis_mode_, referee_instance);
+        M3508_instance, &chassis_mode_, referee_instance, supercap_instance);
     controller_instance->Init(
         IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_, supercap_instance,
         referee_instance);
+    observer_instance->Init(
+        IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_, &controller_instance->u_mat);
     sender_instance->Init(
         DM8009_instance, M3508_instance, DM8009_sender_instance, m3508_sender_instance,
         &chassis_mode_);
@@ -105,17 +105,25 @@ extern "C" void main_task_func(void* argument) {
 
         for (uint8_t i = 0; i < 10; ++i) {
             x_states_watch[i] = observer_instance->x_states_[i];
+            x_desire_watch[i] = desire_instance->desires.xd[i];
         }
+        for (uint8_t i = 0; i < 2; ++i) {
+            wheel_speed_watch[i] = M3508_instance[i]->get_velocity();
+        }
+        // for (uint8_t i = 0; i < 4; ++i) {
+        //     dm8009_encoder_watch[i] = DM8009_instance[i]->calibrate_zero_point();
+        // }
         osDelayUntil(wakeUpTime + 1);
     }
 }
 extern "C" void comm_task_func(void* argument) {
     while (true) {
         ChassisStates data;
-        data.leg_length_L  = observer_instance->leg_length_.L;
-        data.leg_length_R  = observer_instance->leg_length_.R;
-        data.mode          = chassis_mode_;
-        data.chassis_angle = observer_instance->x_states_[2];
+        data.leg_length_L = observer_instance->leg_length_.L;
+        data.leg_length_R = observer_instance->leg_length_.R;
+        data.mode         = chassis_mode_;
+        data.chassis_relative_angle =
+            desire_instance->desires.xd(2, 0) - observer_instance->x_states_(2, 0);
         can_comm_instance->Send(data);
         constexpr uint32_t refresh_rate = 1000 / 50;
         osDelay(refresh_rate);

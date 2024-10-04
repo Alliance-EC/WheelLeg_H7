@@ -18,6 +18,7 @@ struct IMU_output_vector {
     Eigen::Vector3f accel       = {0.0f, 0.0f, 0.0f};
     Eigen::Vector3f euler_angle = {0.0f, 0.0f, 0.0f};
     double Yaw_multi_turn       = 0.0;
+    Eigen::Vector3f accel_b     = {0.0f, 0.0f, 0.0f};
 };
 
 struct IMU_params {
@@ -125,6 +126,12 @@ public:
     }
     [[nodiscard]] Eigen::Vector3f get_euler_angle() const { // 四元数转换顺序为PRY
         return {IMU_data_.Pitch, IMU_data_.Roll, IMU_data_.Yaw};
+    }
+    [[nodiscard]] Eigen::Vector3f get_accel_b() const {
+        return {IMU_data_.MotionAccel_b[0], IMU_data_.MotionAccel_b[1], IMU_data_.MotionAccel_b[2]};
+    }
+    [[nodiscard]] Eigen::Vector3f get_accel_n() const {
+        return {IMU_data_.MotionAccel_n[0], IMU_data_.MotionAccel_n[1], IMU_data_.MotionAccel_n[2]};
     }
     [[nodiscard]] float get_yaw() const { return IMU_data_.Yaw; }
     [[nodiscard]] float get_pitch() const { return IMU_data_.Pitch; }
@@ -249,6 +256,7 @@ private:
             output_vector.gyro           = get_gyro();
             output_vector.accel          = get_accel();
             output_vector.euler_angle    = get_euler_angle();
+            output_vector.accel_b        = get_accel_b();
             output_vector.Yaw_multi_turn = IMU_data_.YawTotalAngle;
             AHRS_ready_                  = true;
         }
@@ -286,6 +294,7 @@ private:
         gyro = install_spin_matrix_ * gyro + gyro_offset_;
         acc  = install_spin_matrix_ * acc + accel_offset_;
     }
+
     /**
      * @brief          Transform 3dvector from BodyFrame to EarthFrame
      * @param[1]       vector in BodyFrame

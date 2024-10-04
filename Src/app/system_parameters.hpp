@@ -1,15 +1,16 @@
 #pragma once
 
+#include <Eigen/Dense>
 #include <cstdint>
 
 namespace app {
 constexpr double m_b   = 16.98;  // 身体质量
 constexpr double eta_l = 0.2945; // 质心位置系数
 constexpr double m_l   = 0.86;
-// 单腿质量
-constexpr double R_l = 0.22; // 半轮距
-constexpr double g   = 9.80665;
-constexpr double Rw  = 0.06; // 轮子半径
+constexpr double m_w   = 0.2;
+constexpr double R_l     = 0.22; // 半轮距
+constexpr double gravity = 9.80665;
+constexpr double Rw      = 0.07; // 轮子半径
 
 constexpr double dt = 0.001;     // 执行周期
 
@@ -30,6 +31,7 @@ enum class chassis_mode : uint8_t {
     spin,
     balanceless,
     unknown,
+    spin_control,
 };
 enum class board : uint8_t {
     UNKNOWN           = 0,

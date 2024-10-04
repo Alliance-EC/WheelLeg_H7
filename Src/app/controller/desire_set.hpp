@@ -4,6 +4,7 @@
 #include "bsp/dwt/dwt.h"
 #include "device/Dji_motor/DJI_motor.hpp"
 #include "device/RC/remote_control_data.hpp"
+#include "device/super_cap/super_cap.hpp"
 #include "module/IMU_EKF/IMU_EKF.hpp"
 #include "module/referee/status.hpp"
 #include <Eigen/Dense>
@@ -41,16 +42,14 @@ public:
                 break;
             }
 
-            if (((RC_->switch_left == RC_Switch::MIDDLE) && (RC_->switch_right == RC_Switch::DOWN))
-                || balanceless_mode_) {
-                reset_all_controls();
-                *mode_ = chassis_mode::balanceless;
-            } else if (RC_->switch_right == RC_Switch::MIDDLE) {
+            if (RC_->switch_right == RC_Switch::MIDDLE) {
                 if (!last_keyboard_.c && RC_->keyboard.c) {
                     *mode_ =
                         *mode_ == chassis_mode::spin ? chassis_mode::follow : chassis_mode::spin;
                 } else if (!last_keyboard_.r && RC_->keyboard.r) {
                     balanceless_mode_ = !balanceless_mode_;
+                    if (!balanceless_mode_)
+                        *mode_ = chassis_mode::follow;
                 } else if (RC_->keyboard.a || RC_->keyboard.d) {
                     if (*mode_ != chassis_mode::sideways_L && *mode_ != chassis_mode::sideways_R)
                         *mode_ =
@@ -60,15 +59,38 @@ public:
                     || (last_switch_right != RC_Switch::MIDDLE)) {
                     *mode_ = chassis_mode::follow;
                 }
-            } else if (RC_->switch_right == RC_Switch::UP) {
-                *mode_ = chassis_mode::spin_control;
-            } else {
+            }
+            if ((((RC_->switch_left == RC_Switch::MIDDLE)
+                  && (RC_->switch_right == RC_Switch::DOWN)))
+                || balanceless_mode_) {
                 reset_all_controls();
+                *mode_ = chassis_mode::balanceless;
+            }
+            if (RC_->switch_right == RC_Switch::UP) {
+                *mode_ = chassis_mode::spin_control;
             }
 
-            auto keyboard_xmove = 1.0 * RC_->keyboard.w - RC_->keyboard.s;
-            auto keyboard_ymove = 0.5 * RC_->keyboard.a - RC_->keyboard.d;
-            auto keyboard_zmove = 0.5 * RC_->keyboard.q - RC_->keyboard.e;
+            auto lerp = [](double start, double end, double t) {
+                return start + t * (end - start);
+            };
+            static double current_xmove       = 0.0;
+            static double current_ymove       = 0.0;
+            static double current_zmove       = 0.0;
+            double target_xmove               = 1.0 * RC_->keyboard.w - RC_->keyboard.s;
+            double target_ymove               = 0.5 * RC_->keyboard.a - RC_->keyboard.d;
+            double target_zmove               = 0.5 * RC_->keyboard.q - RC_->keyboard.e;
+            constexpr double smoothing_factor = 1.0 / 1000; // 1s
+            current_xmove                     = lerp(current_xmove, target_xmove, smoothing_factor);
+            current_ymove                     = lerp(current_ymove, target_ymove, smoothing_factor);
+            current_zmove                     = lerp(current_zmove, target_zmove, smoothing_factor);
+
+            current_xmove       = target_xmove == 0 ? target_xmove : current_xmove;
+            current_ymove       = target_ymove == 0 ? target_ymove : current_ymove;
+            current_zmove       = target_zmove == 0 ? target_zmove : current_zmove;
+            auto keyboard_xmove = current_xmove;
+            auto keyboard_ymove = current_ymove;
+            auto keyboard_zmove = current_zmove;
+
             switch (*mode_) {
             case chassis_mode::follow:
                 if (RC_->keyboard.ctrl && (RC_->keyboard.w || RC_->keyboard.s)) {
@@ -89,9 +111,15 @@ public:
                 break;
             case chassis_mode::spin: set_states_desire(0, spinning_velocity); break;
             case chassis_mode::balanceless:
-                set_states_desire(
-                    RC_->joystick_right.x() + keyboard_xmove,
-                    RC_->joystick_right.y() + keyboard_ymove);
+                if (RC_->keyboard.ctrl && (RC_->keyboard.w || RC_->keyboard.s)) {
+                    set_states_desire(
+                        RC_->joystick_right.x() + keyboard_xmove * 0.35,
+                        RC_->joystick_right.y() + keyboard_ymove * 0.35);
+                } else {
+                    set_states_desire(
+                        RC_->joystick_right.x() + keyboard_xmove,
+                        RC_->joystick_right.y() + keyboard_ymove);
+                }
                 break;
             case chassis_mode::spin_control:
                 set_states_desire(0, RC_->joystick_right.x() * 6);
@@ -116,7 +144,8 @@ public:
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
-        chassis_mode* mode, module::referee::Status* referee) {
+        std::array<module::DM8009*, 4> DM8009, std::array<device::DjiMotor*, 2> M3508,
+        chassis_mode* mode, module::referee::Status* referee, device::SuperCap* supercap_instance) {
         IMU_data_   = IMU_output;
         RC_         = RC;
         GM6020_yaw_ = GM6020_yaw;
@@ -124,6 +153,7 @@ public:
         M3508_      = M3508;
         mode_       = mode;
         referee_    = referee;
+        supercap_   = supercap_instance;
     }
 
     void CanLost() { reset_all_controls(); }
@@ -152,6 +182,7 @@ private:
     chassis_mode* mode_                        = nullptr;
     module::referee::Status* referee_          = nullptr;
     observer::observer* observer_              = observer::observer::GetInstance();
+    device::SuperCap* supercap_;
 
     device::RC_Keyboard last_keyboard_  = {};
     device::RC_Switch last_switch_right = {};
@@ -159,30 +190,39 @@ private:
     bool motor_alive_                   = false;
 
     void set_states_desire(double x_velocity, double rotation_velocity = 0.0) {
-        auto x_d_ref              = x_velocity * x_velocity_scale;
-        x_d_ref                   = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);
+        auto x_d_ref = x_velocity * x_velocity_scale;
+
+        constexpr double power_kp = 0.26;
+        auto power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
+        if (!supercap_->Info.enabled_)
+            x_d_ref = std::clamp(x_d_ref, -power_limit_velocity, power_limit_velocity); // 功控
+
+        x_d_ref = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);             // 上限
         static uint32_t last_time = 0;
         auto dt                   = DWT_GetDeltaT64_Expect(&last_time, app::dt);
 
-        desires.xd(0, 0) += x_d_ref * dt; // distance
+        if (*mode_ == chassis_mode::sideways_R)
+            x_d_ref = -x_d_ref;
+
+        desires.xd(0, 0) += x_d_ref * dt;                                               // distance
         if (*mode_ == chassis_mode::balanceless)
             desires.xd(1, 0) = x_d_ref;
         else
-            desires.xd(1, 0) = 0;         // velocity
+            desires.xd(1, 0) = 0;                                                       // velocity
 
         auto gimbal_yaw_angle = GM6020_yaw_->get_angle();
-        switch (*mode_) {                 // yaw
+        switch (*mode_) {                                                               // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
             desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
             break;
         case chassis_mode::sideways_L:
             desires.xd(2, 0) =
-                IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi / 2.0);
+                IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi * 0.5);
             break;
         case chassis_mode::sideways_R:
             desires.xd(2, 0) =
-                IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle + std::numbers::pi / 2.0);
+                IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi * 1.5);
             break;
         case chassis_mode::spin:
         case chassis_mode::spin_control: desires.xd(2, 0) += rotation_velocity * dt; break;

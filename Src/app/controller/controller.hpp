@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -42,9 +41,9 @@ public:
                 break;
             }
             kinematic_controller();
+            anti_fall_check();
             leg_controller();
             wheel_model_hat();
-            //  leg_coordinator();
             torque_process();
         } while (false);
     }
@@ -63,6 +62,7 @@ public:
     }
 
     control_torque control_torque_ = {};
+    Eigen::Vector<double, 4> u_mat = {};
 
 private:
     Controller()                                              = default; // 禁止外部构造
@@ -73,14 +73,22 @@ private:
     static constexpr double inf = std::numeric_limits<double>::infinity();
     static constexpr double nan = std::numeric_limits<double>::quiet_NaN();
 
-    double F_l = 0, F_r = 0;
+    double F_l_ = 0, F_r_ = 0;
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
     double T_lwl_compensate_ = 0, T_lwr_compensate_ = 0;
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
+    double wheel_speed_hat_[2]      = {};
+    bool about_to_fall_             = false;
+    tool::daemon fall_resume_timer_ = tool::daemon(1, std::bind(&Controller::fall_resume, this));
 
-    double wheel_compensate_kp_ = 0.0;
-    PID pid_roll_               = PID({500, 0.0, 1, 500, 0.0, 0.0, dt});
-    PID pid_length_             = PID({1500, 10, 200, 500, 100.0, 0.0, dt});
+    double wheel_compensate_kp_ = 0.25;
+    PID pid_roll_               = PID({10, 0, 0, 10, 0.0, 0.0, dt});
+    PID pid_roll_d_             = PID({30, 0, 0, 500, 0.0, 0.0, dt});
+    PID pid_length_             = PID({10, 0, 0, 10, 100.0, 0.0, dt});
+    PID pid_length_d_           = PID({150, 0, 0, 500, 100.0, 0.0, dt});
+
+    PID wheel_L_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
+    PID wheel_R_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
 
     observer::observer* observer_           = observer::observer::GetInstance();
     DesireSet* desire_                      = controller::DesireSet::GetInstance();
@@ -98,49 +106,27 @@ private:
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = nullptr;
 
-    // Maximum excess power when buffer energy is sufficient.
-    static constexpr double excess_power_limit = 35;
-    //               power_limit_after_buffer_energy_closed_loop =
-    static constexpr double buffer_energy_control_line = 120; // = referee + excess
-    static constexpr double buffer_energy_base_line    = 50;  // = referee
-    static constexpr double buffer_energy_dead_line    = 0;   // = 0
-
-    int safe_check() {
-        static int mode, last_mode, pitch_count_, leg_angle_count_, count_;
-        static double length = 0.12;
-        length               = (leg_length_->L + leg_length_->R) / 2.0;
-        count_++;
-        /*大倾角检测0.5s，高姿倒地自动收腿起身*/
-        if (fabs(imu_euler->y()) > (0.1 + length * 2.0)) {
-            pitch_count_++;
+    void anti_fall_check() {
+        if (fabs(imu_euler->y()) > (0.1 + observer_->leg_length_avg_ * 0.5)) {
+            about_to_fall_ = true;
+            fall_resume_timer_.reload();
         }
-        if ((fabs((*x_states_)(4, 0)) > (0.2 + length * 2.5))
-            || (fabs((*x_states_)(6, 0)) > (0.2 + length * 2.5))) {
-            leg_angle_count_++;
-        }
-        /*状态判断,触发保护后，直到速度稳定才解除*/
-        if (count_ >= 500) {
-            count_ = 0;
-            if (pitch_count_ > 500) {
-                pitch_count_ = 0;
-                mode         = 1;
-            } else if (leg_angle_count_ > 500) {
-                leg_angle_count_ = 0;
-                mode             = 2;
-            } else if (last_mode) {
-                if (fabs((*x_states_)(1, 0)) < 0.3) {
-                    mode = 0;
-                }
-            }
-        }
-        last_mode = mode;
-        return mode;
+        if (observer_->status_levitate_)                                 // 腾空状态不会触发
+            about_to_fall_ = false;
     }
+    void fall_resume() { about_to_fall_ = false; }
+
     void super_cap_controller() {
+        // Maximum excess power when buffer energy is sufficient.
+        constexpr double excess_power_limit = 35;
+        //               power_limit_after_buffer_energy_closed_loop =
+        constexpr double buffer_energy_control_line = 120; // = referee + excess
+        constexpr double buffer_energy_base_line    = 50;  // = referee
+        constexpr double buffer_energy_dead_line    = 0;   // = 0
+
         device::SuperCapControl SuperCap_set_ = {};
         const auto power_limit                = referee_->chassis_power_limit_;
         const auto power                      = referee_->chassis_power_;
-        const auto power_level                = referee_->chassis_power_level;
         const auto power_buffer               = referee_->buffer_energy_;
 
         double power_limit_after_buffer_energy_closed_loop =
@@ -186,45 +172,70 @@ private:
             e_mat(8, 0) = 0;
             e_mat(9, 0) = 0;
         }
-        auto u_mat = LQR_gain * e_mat;
-        T_lwl_     = u_mat(0, 0);
-        T_lwr_     = u_mat(1, 0);
-        T_bll_     = u_mat(2, 0);
-        T_blr_     = u_mat(3, 0);
+        u_mat  = LQR_gain * e_mat;
+        T_lwl_ = u_mat(0, 0);
+        T_lwr_ = u_mat(1, 0);
+        T_bll_ = u_mat(2, 0);
+        T_blr_ = u_mat(3, 0);
     }
 
     void leg_controller() {
-        auto length = (leg_length_->L + leg_length_->R) / 2.0;
+        auto length   = (leg_length_->L + leg_length_->R) / 2.0;
+        auto length_d = (leg_length_->Ld + leg_length_->Rd) / 2.0;
         /*重力前馈和侧向力前馈*/
-        auto gravity_ff  = [=]() { return (m_b / 2.0 + eta_l * m_l) * g; };
+        auto gravity_ff  = [=]() { return (m_b / 2.0 + eta_l * m_l) * gravity; };
         auto inertial_ff = [=, this]() {
             auto coefficient = length / (2 * R_l) * (*x_states_)(3, 0) * (*x_states_)(1, 0);
             return (m_b / 2.0 + eta_l * m_l) * coefficient;
             // return 0;
         };
 
-        auto length_desire = observer_->status_levitate_ ? 0.3 : *length_desire_;
+        auto length_desire = about_to_fall_ ? 0.12 : *length_desire_;
         auto roll_desire   = observer_->status_levitate_ ? 0.0 : *roll_desire_;
 
-        /*roll和腿长PID运算*/
-        auto F_length = pid_length_.update(length_desire, length);
-        auto F_roll   = pid_roll_.update(roll_desire, imu_euler->x(), imu_gyro->x());
+        static PID_params pid_length_param_storage   = pid_length_.GetParams();
+        static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
+        static PID_params pid_roll_param_storage     = pid_roll_.GetParams();
+        static PID_params pid_roll_d_param_storage   = pid_roll_d_.GetParams();
+        static chassis_mode last_mode                = chassis_mode::stop;
+        if (last_mode != chassis_mode::spin && *mode_ == chassis_mode::spin) {
+            pid_length_.ChangeParams({15, 0, 0, 500, 100.0, 0.0, dt});
+            pid_length_d_.ChangeParams({100, 0, 0, 500, 0.0, 0.0, dt});
+            pid_roll_.ChangeParams({10, 0, 0, 10, 0.0, 0.0, dt});
+            pid_roll_d_.ChangeParams({100, 0, 0, 500, 0.0, 0.0, dt});
+        } else if (last_mode == chassis_mode::spin && *mode_ != chassis_mode::spin) {
+            pid_length_.ChangeParams(pid_length_param_storage);
+            pid_length_d_.ChangeParams(pid_length_d_param_storage);
+            pid_roll_.ChangeParams(pid_roll_param_storage);
+            pid_roll_d_.ChangeParams(pid_roll_d_param_storage);
+        }
 
-        F_l = F_length + F_roll + gravity_ff() - inertial_ff();
-        F_r = F_length - F_roll + gravity_ff() + inertial_ff();
+        auto length_out     = pid_length_.update(length_desire, length);
+        auto F_length       = pid_length_d_.update(length_out, length_d);
+        auto roll_angle_out = pid_roll_.update(roll_desire, observer_->roll_);
+        auto F_roll         = pid_roll_d_.update(roll_angle_out, observer_->roll_d_);
+
+        F_l_ = F_length + F_roll + gravity_ff() - inertial_ff();
+        F_r_ = F_length - F_roll + gravity_ff() + inertial_ff();
+
+        // last_mode = *mode_;
     }
     void wheel_model_hat() {
-        double wheel_speed_hat[2];
         constexpr double predict_dt = 0.001; // 预测之后多少时间的值
         speed_hat(
             T_bll_, T_blr_, T_lwl_, T_lwr_, predict_dt, leg_length_->L, leg_length_->R,
             (*x_states_)(3, 0), (*x_states_)(1, 0), (*x_states_)(4, 0), (*x_states_)(6, 0),
-            wheel_speed_hat);
+            wheel_speed_hat_);
 
-        T_lwl_compensate_ =
-            wheel_compensate_kp_ * (wheel_speed_hat[0] - M3508_[wheel_L]->get_velocity());
-        T_lwr_compensate_ =
-            wheel_compensate_kp_ * (wheel_speed_hat[1] - M3508_[wheel_R]->get_velocity());
+        constexpr double slip_start = 2;
+        if (std::abs(wheel_speed_hat_[0] - M3508_[wheel_L]->get_velocity()) > slip_start) {
+            T_lwl_compensate_ =
+                wheel_compensate_kp_ * (wheel_speed_hat_[0] - M3508_[wheel_L]->get_velocity());
+        }
+        if (std::abs(wheel_speed_hat_[1] - M3508_[wheel_R]->get_velocity()) > slip_start) {
+            T_lwr_compensate_ =
+                wheel_compensate_kp_ * (wheel_speed_hat_[1] - M3508_[wheel_R]->get_velocity());
+        }
     }
     void torque_process() {
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
@@ -235,13 +246,11 @@ private:
         T_bll_ += T_bll_compensate_;
         T_blr_ += T_blr_compensate_;
 
-        /*功率扭矩计算进行轮电机输出限制*/
-        // if (super_cap_fdb_->status == true) {
-        //     wheel_power_.setPowerMax(999.0);
-        // } else {
-        //     wheel_power_.setPowerMax(720.0);
-        // }
-        // wheel_power_.limitTouque(T_lwl_, motor_fdb_->speed_l, T_lwr_, motor_fdb_->speed_r);
+        if (observer_->status_levitate_) {
+            T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
+            T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
+        }
+
         constexpr double max_torque_wheel = 5.0f;
         control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
         control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
@@ -254,10 +263,10 @@ private:
         T_blr_ = std::clamp(T_blr_, -LEG_T_MAX, LEG_T_MAX);
         /*VMC解算到关节电机扭矩*/
         double leg_T[2];
-        leg_conv(F_l, T_bll_, DM8009_[leg_LF]->get_angle(), DM8009_[leg_LB]->get_angle(), leg_T);
+        leg_conv(F_l_, T_bll_, DM8009_[leg_LF]->get_angle(), DM8009_[leg_LB]->get_angle(), leg_T);
         control_torque_.leg_LF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_LB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
-        leg_conv(F_r, T_blr_, DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), leg_T);
+        leg_conv(F_r_, T_blr_, DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), leg_T);
         control_torque_.leg_RF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
     }
