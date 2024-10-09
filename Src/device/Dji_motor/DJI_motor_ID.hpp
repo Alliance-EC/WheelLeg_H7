@@ -1,11 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include <type_traits>
 namespace device {
 template <typename T>
-std::enable_if_t<std::is_enum_v<T>, uint32_t> toU32(T enum_val) {
-    return static_cast<uint32_t>(enum_val);
+constexpr T operator+(T id, uint32_t value) {
+    return static_cast<T>(static_cast<uint32_t>(id) + value);
 }
 enum class M3508_ID : uint16_t {
     ID1 = 0x201,

@@ -50,11 +50,17 @@ struct __attribute__((packed)) DjiMotorControl {
 struct DjiMotor_params {
     bsp::can_params can_params     = {};
     std::function<void()> callback = nullptr;
-    virtual DjiMotor_params& set_can_instance(FDCAN_HandleTypeDef* can_handle) {
+    DjiMotor_params& set_can_instance(FDCAN_HandleTypeDef* can_handle) {
         return can_params.can_handle = can_handle, *this;
     }
-    virtual DjiMotor_params& set_rx_id(uint32_t id) { return can_params.rx_id = id, *this; }
-    virtual DjiMotor_params& set_tx_id(uint32_t id) { return can_params.tx_id = id, *this; }
+    template <typename T>
+    DjiMotor_params& set_rx_id(T id) {
+        return can_params.rx_id = static_cast<uint32_t>(id), *this;
+    }
+    template <typename T>
+    DjiMotor_params& set_tx_id(T id) {
+        return can_params.tx_id = static_cast<uint32_t>(id), *this;
+    }
 };
 class DjiMotor {
 public:
@@ -87,7 +93,7 @@ public:
         raw_velocity_to_velocity_coefficient_ =
             static_cast<double>(sign / config.reduction_ratio / 60 * 2 * std::numbers::pi);
         if (config.motor_type == DjiMotorType::DM8009)
-            raw_velocity_to_velocity_coefficient_ *= 0.01;       // 原始数据被放大了100倍
+            raw_velocity_to_velocity_coefficient_ *= 0.01; // 原始数据被放大了100倍
         velocity_to_raw_velocity_coefficient_ = 1 / raw_velocity_to_velocity_coefficient_;
 
         double torque_constant = 0.0, raw_current_max = 0.0, current_max = 0.0;
@@ -112,7 +118,7 @@ public:
             raw_current_max = 16384.0;
             current_max     = 10.0;
             break;
-        case DjiMotorType::DM8009:                               // 假装是DJI的电机
+        case DjiMotorType::DM8009:                         // 假装是DJI的电机
             torque_constant = 1.261575;
             raw_current_max = 16384.0;
             current_max     = 32.835820896;
@@ -125,7 +131,7 @@ public:
         torque_to_raw_current_coefficient_ = 1 / raw_current_to_torque_coefficient_;
         if (config.motor_type == DjiMotorType::DM8009)
             raw_current_to_torque_coefficient_ =
-                sign * torque_constant * 0.8 / 1000;             // feedback unit:mA
+                sign * torque_constant * 0.8 / 1000;       // feedback unit:mA
 
         reduction_ratio_ = config.reduction_ratio;
         max_torque_      = 1 * config.reduction_ratio * torque_constant * current_max;

@@ -49,26 +49,26 @@ void Init() {
 
     for (uint8_t i = 0; i < 2; ++i) {
         M3508_instance[i] = new device::DjiMotor(
-            DjiMotor_params().set_can_instance(&hfdcan2).set_rx_id(toU32(M3508_ID::ID1) + i));
+            DjiMotor_params().set_can_instance(&hfdcan2).set_rx_id(M3508_ID::ID1 + i));
     }
     for (uint8_t i = 0; i < 4; ++i) {
         auto params = module::DM8009_params();
-        params.Dji_common.set_can_instance(&hfdcan3).set_rx_id(toU32(DM8009_ID::ID1) + i);
+        params.Dji_common.set_can_instance(&hfdcan3).set_rx_id(DM8009_ID::ID1 + i);
         DM8009_instance[i] = new module::DM8009(params);
     }
     GM6020_yaw_instance = new device::DjiMotor(
-        DjiMotor_params().set_can_instance(&hfdcan1).set_rx_id(toU32(GM6020_ID::ID1)));
+        DjiMotor_params().set_can_instance(&hfdcan1).set_rx_id(GM6020_ID::ID1));
 
     m3508_sender_instance = new device::DjiMotor_sender(
-        DjiMotor_params().set_can_instance(&hfdcan2).set_tx_id(toU32(M3508_sendID::ID1)));
+        DjiMotor_params().set_can_instance(&hfdcan2).set_tx_id(M3508_sendID::ID1));
     DM8009_sender_instance = new device::DjiMotor_sender(
-        DjiMotor_params().set_can_instance(&hfdcan3).set_tx_id(toU32(DM8009_sendID::ID1)));
+        DjiMotor_params().set_can_instance(&hfdcan3).set_tx_id(DM8009_sendID::ID1));
 
     auto M3508_config = device::DjiMotorConfig(device::DjiMotorType::M3508)
                             .enable_multi_turn_angle()
                             .set_reduction_ratio(268.0 / 17);
     M3508_instance[1]->configure(M3508_config);
-    M3508_instance[0]->configure(M3508_config.reverse()); // 顺序不要变
+    M3508_instance[0]->configure(M3508_config.reverse()); // 先正后反 顺序不要变
 
     DM8009_instance[0]->configure(6466, true);
     DM8009_instance[1]->configure(7954, true);
