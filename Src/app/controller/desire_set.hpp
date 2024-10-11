@@ -197,11 +197,12 @@ private:
         if (chassis_mode_ == chassis_mode::sideways_R)
             x_d_ref = -x_d_ref;
 
-        desires.xd(0, 0) += x_d_ref * dt;                                               // distance
-        if (*mode_ == chassis_mode::balanceless)
-            desires.xd(1, 0) = x_d_ref;
+        desires.xd(0, 0) = 0;       // distance :always 0 during velocity control
+        desires.xd(1, 0) = x_d_ref; // velocity
+        if (std::fabs(x_d_ref) > 1e-3)
+            IsControlling = true;
         else
-            desires.xd(1, 0) = 0;                                                       // velocity
+            IsControlling = false;
 
         auto gimbal_yaw_angle = GM6020_yaw_->get_angle();
         switch (chassis_mode_) {    // yaw
@@ -243,7 +244,6 @@ private:
         chassis_mode_      = chassis_mode::stop;
         SuperCap_ON_       = false;
     }
-    void reset_persistent_data() { desires.xd(0, 0) = 0; }
     void motor_alive_detect() {
         motor_alive_ = false;
         for (auto motor : M3508_) {

@@ -5,8 +5,8 @@
 #include "module/DM8009/DM8009.hpp"
 #include "module/IMU_EKF/IMU_EKF.hpp"
 #include "tool/daemon/daemon.hpp"
-#include "tool/filter//low_pass_filter.hpp"
 #include "tool/filter/OLS.hpp"
+#include "tool/filter/low_pass_filter.hpp"
 #include "velocity_kalman.hpp"
 #include <Eigen/Dense>
 #include <cmath>
@@ -101,6 +101,7 @@ private:
     double dt_ = app::dt;
     uint32_t last_time;
     bool allow_levitate_              = true;
+    bool parking_mode_                = false;
     const Eigen::Vector3f *imu_accel_ = nullptr, *imu_gyro_ = nullptr, *imu_euler_ = nullptr;
     Eigen::Vector<double, 4>* u_mat_ = nullptr;
     // kalman_observer kalman_observer_ = {};
@@ -126,7 +127,7 @@ private:
         static double last_length_Ld = 0.0;
         static double last_length_Rd = 0.0;
         double data[2];
-        /*左腿虚拟角度和长度*/
+        // left
         leg_pos(DM8009_[leg_LF]->get_angle(), DM8009_[leg_LB]->get_angle(), data);
 
         leg_length_.L = data[0];                                // ll
@@ -147,7 +148,7 @@ private:
         leg_length_.Ldd = (leg_length_.Ld - last_length_Ld) / dt_;
         last_length_Ld  = leg_length_.Ld;
 
-        /*右腿虚拟腿角度和长度*/
+        // right
         leg_pos(DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), data);
 
         leg_length_.R = data[0];                                // lr
@@ -173,20 +174,31 @@ private:
 
     void wheel_update() {
         // 驱动轮相对于大地的速度
-        velocity_ = (M3508_[wheel_L]->get_velocity() + theta_Ld_ + M3508_[wheel_R]->get_velocity()
-                     + theta_Ld_ + theta_Rd_)
-                  * Rw / 2.0f;
+        auto s_dot =
+            (M3508_[wheel_L]->get_velocity() + M3508_[wheel_R]->get_velocity()) * Rw / 2.0f;
         //  https://zhuanlan.zhihu.com/p/689921165
         auto v_ll =
             leg_length_.L * std::cos(theta_L_) * theta_Ld_ + leg_length_.Ld * std::sin(theta_L_);
         auto v_lr =
             leg_length_.R * std::cos(theta_R_) * theta_Rd_ + leg_length_.Rd * std::sin(theta_R_);
-        auto s_bd     = velocity_ + (v_ll + v_lr) / 2;
-        double z[2]   = {s_bd, -IMU_->output_vector.accel_b.x()};
+        auto s_bd     = s_dot + (v_ll + v_lr) / 2;
+        double z[2]   = {s_bd, IMU_->output_vector.accel_b.x()};
         auto s_bd_est = velocity_kalman_.update(z);
         // velocity_ = velocity_OLS_.Smooth(dt_, velocity_);
         velocity_ = s_bd_est;
-        distance_ += velocity_ * dt_;
+
+        if (!IsControlling && std::fabs(s_dot) < 1e-2) { // 等待验证
+            parking_mode_ = true;
+        } else if (IsControlling) {
+            parking_mode_ = false;
+        }
+
+        if (parking_mode_) { // when the robot is not moving, change to distance control
+            // velocity_ = s_dot;
+            distance_ += velocity_ * dt_;
+        } else {
+            reset_persistent_data();
+        }
     }
     void support_force_update() {
         double data[2];
