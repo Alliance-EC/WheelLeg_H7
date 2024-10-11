@@ -35,13 +35,11 @@ public:
     }
     void Init(
         std::array<module::DM8009*, 4> DM8009, std::array<device::DjiMotor*, 2> M3508,
-        device::DjiMotor_sender* DM8009_sender, device::DjiMotor_sender* m3508_sender,
-        chassis_mode* mode) {
+        device::DjiMotor_sender* DM8009_sender, device::DjiMotor_sender* m3508_sender) {
         DM8009_        = DM8009;
         M3508_         = M3508;
         DM8009_sender_ = DM8009_sender;
         M3508_sender_  = m3508_sender;
-        mode_          = mode;
     }
 
 private:
@@ -55,7 +53,7 @@ private:
     std::array<module::DM8009*, 4> DM8009_  = {};
     std::array<device::DjiMotor*, 2> M3508_ = {};
 
-    const chassis_mode* mode_     = nullptr;
+    const chassis_mode* mode_     = &app::chassis_mode_;
     const control_torque* torque_ = &Controller::GetInstance()->control_torque_;
     tool::PID wheel_L_PID_        = tool::PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
     tool::PID wheel_R_PID_        = tool::PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});

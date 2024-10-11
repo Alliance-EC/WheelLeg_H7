@@ -59,16 +59,14 @@ public:
     }
     void Init(
         module::IMU* IMU, std::array<module::DM8009*, 4> DM8009,
-        std::array<device::DjiMotor*, 2> M3508, chassis_mode* chassis_mode,
-        Eigen::Vector<double, 4>* u_mat) {
-        IMU_          = IMU;
-        DM8009_       = DM8009;
-        M3508_        = M3508;
-        chassis_mode_ = chassis_mode;
-        imu_accel_    = &IMU_->output_vector.accel;
-        imu_gyro_     = &IMU_->output_vector.gyro;
-        imu_euler_    = &IMU_->output_vector.euler_angle;
-        u_mat_        = u_mat;
+        std::array<device::DjiMotor*, 2> M3508, Eigen::Vector<double, 4>* u_mat) {
+        IMU_       = IMU;
+        DM8009_    = DM8009;
+        M3508_     = M3508;
+        imu_accel_ = &IMU_->output_vector.accel;
+        imu_gyro_  = &IMU_->output_vector.gyro;
+        imu_euler_ = &IMU_->output_vector.euler_angle;
+        u_mat_     = u_mat;
     }
     // output variables
     Eigen::Matrix<double, 10, 1> x_states_;
@@ -96,7 +94,7 @@ private:
     module::IMU* IMU_                       = nullptr;
     std::array<module::DM8009*, 4> DM8009_  = {};
     std::array<device::DjiMotor*, 2> M3508_ = {};
-    const chassis_mode* chassis_mode_       = nullptr; // 设为指针以便在外部修改
+    const chassis_mode* chassis_mode_       = &app::chassis_mode_;
     tool::daemon levitate_allow_timer_ =
         tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
 

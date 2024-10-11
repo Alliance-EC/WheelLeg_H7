@@ -32,8 +32,6 @@ static auto desire_instance     = controller::DesireSet::GetInstance();
 static auto controller_instance = controller::Controller::GetInstance();
 static auto sender_instance     = controller::SendProcess::GetInstance();
 
-static chassis_mode chassis_mode_;
-
 static volatile double x_states_watch[10];
 static volatile double x_desire_watch[10];
 static volatile double wheel_speed_watch[2] = {};
@@ -80,15 +78,13 @@ void Init() {
 
     desire_instance->Init(
         &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, DM8009_instance,
-        M3508_instance, &chassis_mode_, referee_instance, supercap_instance);
+        M3508_instance, referee_instance, supercap_instance);
     controller_instance->Init(
-        IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_, supercap_instance,
-        referee_instance);
+        IMU_instance, DM8009_instance, M3508_instance, supercap_instance, referee_instance);
     observer_instance->Init(
-        IMU_instance, DM8009_instance, M3508_instance, &chassis_mode_, &controller_instance->u_mat);
+        IMU_instance, DM8009_instance, M3508_instance, &controller_instance->u_mat);
     sender_instance->Init(
-        DM8009_instance, M3508_instance, DM8009_sender_instance, m3508_sender_instance,
-        &chassis_mode_);
+        DM8009_instance, M3508_instance, DM8009_sender_instance, m3508_sender_instance);
     __enable_irq();
 }
 static double dt_watch;

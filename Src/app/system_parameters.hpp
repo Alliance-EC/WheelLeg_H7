@@ -49,4 +49,8 @@ enum leg : uint8_t {
     leg_RB = 4 - 1,
 };
 constexpr board this_board = board::DM_MC02;
+
+// public variables
+static bool IsControlling = false;
+static chassis_mode chassis_mode_;
 } // namespace app

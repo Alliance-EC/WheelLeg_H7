@@ -37,37 +37,38 @@ public:
                 || !(referee_->chassis_power_status && referee_->gimbal_power_status)
                 || !motor_alive_) {
                 reset_all_controls();
-                SuperCap_ON_ = false;
-                *mode_       = chassis_mode::stop;
+                SuperCap_ON_  = false;
+                chassis_mode_ = chassis_mode::stop;
                 break;
             }
 
             if (RC_->switch_right == RC_Switch::MIDDLE) {
                 if (!last_keyboard_.c && RC_->keyboard.c) {
-                    *mode_ =
-                        *mode_ == chassis_mode::spin ? chassis_mode::follow : chassis_mode::spin;
+                    chassis_mode_ = chassis_mode_ == chassis_mode::spin ? chassis_mode::follow
+                                                                        : chassis_mode::spin;
                 } else if (!last_keyboard_.r && RC_->keyboard.r) {
                     balanceless_mode_ = !balanceless_mode_;
                     if (!balanceless_mode_)
-                        *mode_ = chassis_mode::follow;
+                        chassis_mode_ = chassis_mode::follow;
                 } else if (RC_->keyboard.a || RC_->keyboard.d) {
-                    if (*mode_ != chassis_mode::sideways_L && *mode_ != chassis_mode::sideways_R)
-                        *mode_ =
+                    if (chassis_mode_ != chassis_mode::sideways_L
+                        && chassis_mode_ != chassis_mode::sideways_R)
+                        chassis_mode_ =
                             RC_->keyboard.a ? chassis_mode::sideways_L : chassis_mode::sideways_R;
                 } else if (
                     RC_->keyboard.w || RC_->keyboard.s
                     || (last_switch_right != RC_Switch::MIDDLE)) {
-                    *mode_ = chassis_mode::follow;
+                    chassis_mode_ = chassis_mode::follow;
                 }
             }
             if ((((RC_->switch_left == RC_Switch::MIDDLE)
                   && (RC_->switch_right == RC_Switch::DOWN)))
                 || balanceless_mode_) {
                 reset_all_controls();
-                *mode_ = chassis_mode::balanceless;
+                chassis_mode_ = chassis_mode::balanceless;
             }
             if (RC_->switch_right == RC_Switch::UP) {
-                *mode_ = chassis_mode::spin_control;
+                chassis_mode_ = chassis_mode::spin_control;
             }
 
             auto lerp = [](double start, double end, double t) {
@@ -91,7 +92,7 @@ public:
             auto keyboard_ymove = current_ymove;
             auto keyboard_zmove = current_zmove;
 
-            switch (*mode_) {
+            switch (chassis_mode_) {
             case chassis_mode::follow:
                 if (RC_->keyboard.ctrl && (RC_->keyboard.w || RC_->keyboard.s)) {
                     set_states_desire(RC_->joystick_right.x() + keyboard_xmove * 0.35);
@@ -136,22 +137,19 @@ public:
 
         } while (false);
         last_switch_right = RC_->switch_right;
-        if (*mode_ == chassis_mode::stop)
+        if (chassis_mode_ == chassis_mode::stop)
             last_switch_right = RC_Switch::UNKNOWN;
         last_keyboard_ = RC_->keyboard;
-        if (observer_->status_levitate_)
-            reset_persistent_data();
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
         std::array<module::DM8009*, 4> DM8009, std::array<device::DjiMotor*, 2> M3508,
-        chassis_mode* mode, module::referee::Status* referee, device::SuperCap* supercap_instance) {
+        module::referee::Status* referee, device::SuperCap* supercap_instance) {
         IMU_data_   = IMU_output;
         RC_         = RC;
         GM6020_yaw_ = GM6020_yaw;
         DM8009_     = DM8009;
         M3508_      = M3508;
-        mode_       = mode;
         referee_    = referee;
         supercap_   = supercap_instance;
     }
@@ -170,16 +168,12 @@ private:
     static constexpr double inf = std::numeric_limits<double>::infinity();
     static constexpr double nan = std::numeric_limits<double>::quiet_NaN();
 
-    // rclcpp::TimerBase::SharedPtr rc_watchdog_timer_;
-    // InputInterface<msgs::chassis_power> robot_chassis_power_;
-
     device::DjiMotor* GM6020_yaw_           = nullptr;
     std::array<module::DM8009*, 4> DM8009_  = {};
     std::array<device::DjiMotor*, 2> M3508_ = {};
 
     const device::RC_status* RC_               = nullptr;
     const module::IMU_output_vector* IMU_data_ = nullptr;
-    chassis_mode* mode_                        = nullptr;
     module::referee::Status* referee_          = nullptr;
     observer::observer* observer_              = observer::observer::GetInstance();
     device::SuperCap* supercap_;
@@ -196,12 +190,11 @@ private:
         auto power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
         if (!supercap_->Info.enabled_)
             x_d_ref = std::clamp(x_d_ref, -power_limit_velocity, power_limit_velocity); // 功控
-
         x_d_ref = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);             // 上限
         static uint32_t last_time = 0;
         auto dt                   = DWT_GetDeltaT64_Expect(&last_time, app::dt);
 
-        if (*mode_ == chassis_mode::sideways_R)
+        if (chassis_mode_ == chassis_mode::sideways_R)
             x_d_ref = -x_d_ref;
 
         desires.xd(0, 0) += x_d_ref * dt;                                               // distance
@@ -211,7 +204,7 @@ private:
             desires.xd(1, 0) = 0;                                                       // velocity
 
         auto gimbal_yaw_angle = GM6020_yaw_->get_angle();
-        switch (*mode_) {                                                               // yaw
+        switch (chassis_mode_) {    // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
             desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
@@ -247,7 +240,7 @@ private:
         desires.xd.setZero();
         desires.roll       = 0;
         desires.leg_length = 0.12;
-        *mode_             = chassis_mode::stop;
+        chassis_mode_      = chassis_mode::stop;
         SuperCap_ON_       = false;
     }
     void reset_persistent_data() { desires.xd(0, 0) = 0; }

@@ -43,18 +43,17 @@ public:
             kinematic_controller();
             anti_fall_check();
             leg_controller();
-            wheel_model_hat();
+            // wheel_model_hat();
             torque_process();
         } while (false);
     }
     void Init(
         module::IMU* IMU, std::array<module::DM8009*, 4> DM8009,
-        std::array<device::DjiMotor*, 2> M3508, chassis_mode* chassis_mode,
-        device::SuperCap* super_cap, module::referee::Status* referee) {
+        std::array<device::DjiMotor*, 2> M3508, device::SuperCap* super_cap,
+        module::referee::Status* referee) {
         IMU_      = IMU;
         DM8009_   = DM8009;
         M3508_    = M3508;
-        mode_     = chassis_mode;
         imu_euler = &IMU_->output_vector.euler_angle;
         imu_gyro  = &IMU_->output_vector.gyro;
         referee_  = referee;
@@ -104,7 +103,7 @@ private:
     const double* length_desire_                  = &desire_->desires.leg_length;
     const double* roll_desire_                    = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
-    const chassis_mode* mode_ = nullptr;
+    const chassis_mode* mode_ = &chassis_mode_;
 
     void anti_fall_check() {
         if (fabs(imu_euler->y()) > (0.1 + observer_->leg_length_avg_ * 0.5)) {
