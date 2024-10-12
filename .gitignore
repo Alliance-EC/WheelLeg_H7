@@ -9,6 +9,7 @@
 /bin
 /obj
 /out
+/.verysync
 
 # eide template
 *.ept
