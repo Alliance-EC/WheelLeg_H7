@@ -108,8 +108,8 @@ private:
 
     tool::filter::LowPassFilter angle_Ld_LPF_ = tool::filter::LowPassFilter(100);
     tool::filter::LowPassFilter angle_Rd_LPF_ = tool::filter::LowPassFilter(100);
-    tool::filter::LowPassFilter length_L_LPF_ = tool::filter::LowPassFilter(50);
-    tool::filter::LowPassFilter length_R_LPF_ = tool::filter::LowPassFilter(50);
+    tool::filter::LowPassFilter length_L_LPF_ = tool::filter::LowPassFilter(100);
+    tool::filter::LowPassFilter length_R_LPF_ = tool::filter::LowPassFilter(100);
     tool::filter::OLS velocity_OLS_           = tool::filter::OLS(50);
     // clang-format on
     void IMU_update() {
