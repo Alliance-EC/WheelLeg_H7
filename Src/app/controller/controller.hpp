@@ -82,7 +82,7 @@ private:
     tool::daemon fall_resume_timer_ = tool::daemon(0.5, std::bind(&Controller::fall_resume, this));
 
     double wheel_compensate_kp_ = 0.25;
-    PID pid_roll_               = PID({10, 0, 0, 10, 0.0, 0.0, dt});
+    PID pid_roll_               = PID({300, 0, 0, 500, 0.0, 0.0, dt});
     PID pid_roll_d_             = PID({30, 0, 0, 500, 0.0, 0.0, dt});
     PID pid_length_             = PID({10, 0, 0, 10, 100.0, 0.0, dt});
     PID pid_length_d_           = PID({150, 0, 0, 500, 100.0, 0.0, dt});
@@ -113,7 +113,7 @@ private:
             about_to_fall_ = true;
             fall_resume_timer_.reload();
         }
-        if (observer_->status_levitate_)                                 // 腾空状态不会触发
+        if (observer_->status_levitate_) // 腾空状态不会触发
             about_to_fall_ = false;
     }
     void fall_resume() { about_to_fall_ = false; }
@@ -185,8 +185,8 @@ private:
         auto length   = (leg_length_->L + leg_length_->R) / 2.0;
         auto length_d = (leg_length_->Ld + leg_length_->Rd) / 2.0;
         /*重力前馈和侧向力前馈*/
-        auto gravity_ff  = [=]() { return (m_b / 2.0 + eta_l * m_l) * gravity; };
-        auto inertial_ff = [=, this]() {
+        constexpr auto gravity_ff = [=]() { return (m_b / 2.0 + eta_l * m_l) * gravity; };
+        auto inertial_ff          = [=, this]() {
             auto coefficient = length / (2 * R_l) * (*x_states_)(3, 0) * (*x_states_)(1, 0);
             return (m_b / 2.0 + eta_l * m_l) * coefficient;
             // return 0;
@@ -195,32 +195,28 @@ private:
         auto length_desire = about_to_fall_ ? 0.12 : *length_desire_;
         auto roll_desire   = observer_->status_levitate_ ? 0.0 : *roll_desire_;
 
-        static PID_params pid_length_param_storage   = pid_length_.GetParams();
-        static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
-        static PID_params pid_roll_param_storage     = pid_roll_.GetParams();
-        static PID_params pid_roll_d_param_storage   = pid_roll_d_.GetParams();
-        static chassis_mode last_mode                = chassis_mode::stop;
-        if (last_mode != chassis_mode::spin && *mode_ == chassis_mode::spin) {
-            pid_length_.ChangeParams({15, 0, 0, 500, 100.0, 0.0, dt});
-            pid_length_d_.ChangeParams({100, 0, 0, 500, 0.0, 0.0, dt});
-            pid_roll_.ChangeParams({10, 0, 0, 10, 0.0, 0.0, dt});
-            pid_roll_d_.ChangeParams({100, 0, 0, 500, 0.0, 0.0, dt});
-        } else if (last_mode == chassis_mode::spin && *mode_ != chassis_mode::spin) {
-            pid_length_.ChangeParams(pid_length_param_storage);
-            pid_length_d_.ChangeParams(pid_length_d_param_storage);
+        static PID_params pid_roll_param_storage   = pid_roll_.GetParams();
+        static PID_params pid_roll_d_param_storage = pid_roll_d_.GetParams();
+        static chassis_mode last_mode              = chassis_mode::stop;
+        if (last_mode != chassis_mode::spin_control && *mode_ == chassis_mode::spin_control) {
+            pid_roll_.ChangeParams({1500, 0, 0, 500, 0.0, 0.0, dt});
+            pid_roll_d_.ChangeParams({45, 0, 0, 500, 0.0, 0.0, dt});
+        } else if (
+            last_mode == chassis_mode::spin_control && *mode_ != chassis_mode::spin_control) {
             pid_roll_.ChangeParams(pid_roll_param_storage);
             pid_roll_d_.ChangeParams(pid_roll_d_param_storage);
         }
 
-        auto length_out     = pid_length_.update(length_desire, length);
-        auto F_length       = pid_length_d_.update(length_out, length_d);
-        auto roll_angle_out = pid_roll_.update(roll_desire, observer_->roll_);
-        auto F_roll         = pid_roll_d_.update(roll_angle_out, observer_->roll_d_);
+        auto length_out      = pid_length_.update(length_desire, length);
+        auto F_length        = pid_length_d_.update(length_out, length_d);
+        auto roll_angle_out  = pid_roll_.update(roll_desire, observer_->roll_);
+        auto roll_angled_out = pid_roll_d_.update(0, observer_->roll_d_);
+        auto F_roll          = roll_angle_out + roll_angled_out;
 
         F_l_ = F_length + F_roll + gravity_ff() - inertial_ff();
         F_r_ = F_length - F_roll + gravity_ff() + inertial_ff();
 
-        // last_mode = *mode_;
+        last_mode = *mode_;
     }
     void wheel_model_hat() {
         constexpr double predict_dt = 0.001; // 预测之后多少时间的值
