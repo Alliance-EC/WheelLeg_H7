@@ -290,8 +290,8 @@ private:
         control_torque_.leg_RB = nan;
 
         double rotation_velocity = std::clamp(10 * angle_error, -3.0, 3.0);
-        control_torque_.wheel_L  = static_cast<float>((x_speed - rotation_velocity * R_l) / Rw);
-        control_torque_.wheel_R  = static_cast<float>((x_speed + rotation_velocity * R_l) / Rw);
+        control_torque_.wheel_L  = (x_speed - rotation_velocity * R_l) / Rw;
+        control_torque_.wheel_R  = (x_speed + rotation_velocity * R_l) / Rw;
     }
 };
 } // namespace app::controller
