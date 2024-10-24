@@ -79,7 +79,7 @@ private:
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
     double wheel_speed_hat_[2]      = {};
     bool about_to_fall_             = false;
-    tool::daemon fall_resume_timer_ = tool::daemon(1, std::bind(&Controller::fall_resume, this));
+    tool::daemon fall_resume_timer_ = tool::daemon(0.5, std::bind(&Controller::fall_resume, this));
 
     double wheel_compensate_kp_ = 0.25;
     PID pid_roll_               = PID({10, 0, 0, 10, 0.0, 0.0, dt});
