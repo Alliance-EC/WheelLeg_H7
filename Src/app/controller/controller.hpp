@@ -44,6 +44,7 @@ public:
             anti_fall_check();
             leg_controller();
             // wheel_model_hat();
+            leg_split_corrector();
             torque_process();
         } while (false);
     }
@@ -88,6 +89,8 @@ private:
 
     PID wheel_L_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
     PID wheel_R_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
+
+    PID leg_split_corrector_PID_ = PID({10, 0.0, 0.0005, 4.0, 0.0, 0.0, dt}); // PD
 
     observer::observer* observer_           = observer::observer::GetInstance();
     DesireSet* desire_                      = controller::DesireSet::GetInstance();
@@ -235,6 +238,12 @@ private:
             T_lwr_compensate_ =
                 wheel_compensate_kp_ * (wheel_speed_hat_[1] - M3508_[wheel_R]->get_velocity());
         }
+    }
+    void leg_split_corrector() {
+        auto leg_split_correct_torque = leg_split_corrector_PID_.update(
+            0, (*x_states_)(4, 0) - (*x_states_)(6, 0), (*x_states_)(5, 0) - (*x_states_)(7, 0));
+        T_bll_compensate_ = -leg_split_correct_torque;
+        T_blr_compensate_ = +leg_split_correct_torque;
     }
     void torque_process() {
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
