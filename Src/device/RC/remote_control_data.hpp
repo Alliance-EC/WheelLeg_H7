@@ -68,5 +68,7 @@ struct RC_status {
 
     RC_Mouse mouse       = RC_Mouse::zero();
     RC_Keyboard keyboard = RC_Keyboard::zero();
+
+    float dial = 0;
 };
 } // namespace device

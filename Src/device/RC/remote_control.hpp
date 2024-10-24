@@ -69,6 +69,8 @@ private:
 
         data.keyboard = feedback.keyboard;
 
+        data.dial=channel_to_float(feedback.dial);//up is negative
+
         daemon_.reload();
     }
     void RemoteControlLostCallback() {
