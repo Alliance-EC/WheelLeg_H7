@@ -184,7 +184,6 @@ private:
         auto s_bd     = s_dot + (v_ll + v_lr) / 2;
         double z[2]   = {s_bd, IMU_->output_vector.accel_b.x()};
         auto s_bd_est = velocity_kalman_.update(z);
-        // velocity_ = velocity_OLS_.Smooth(dt_, velocity_);
         velocity_ = s_bd_est;
 
         if (!IsControlling && std::fabs(s_dot) < 1e-2) { // 等待验证
@@ -194,10 +193,11 @@ private:
         }
 
         if (parking_mode_) { // when the robot is not moving, change to distance control
-            // velocity_ = s_dot;
+            velocity_kalman_.set_parking();
             distance_ += velocity_ * dt_;
         } else {
             reset_persistent_data();
+            velocity_kalman_.set_normal();
         }
     }
     void support_force_update() {

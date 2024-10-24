@@ -13,11 +13,19 @@ public:
         if (std::abs(z[0]) > 1e2 || std::abs(z[1]) > 1e2 || std::isnan(z[0]) || std::isnan(z[1]))
             return 0;
 
-        sigma_v_     = Is_slip_ ? 1000 : sigma_v_storage;
+        if (Is_parking) {
+            sigma_v_ = sigma_v_parking;
+        } else {
+            sigma_v_ = sigma_v_normal;
+        }
         velocity_est = update_KF(z);
         return velocity_est;
     }
-    void set_slip(bool slip) { Is_slip_ = slip; };
+    void set_parking() { Is_parking = true; }
+    void set_normal() {
+        Is_slip_   = false;
+        Is_parking = false;
+    }
     [[nodiscard]] bool get_slip() const { return Is_slip_; };
     double velocity_est = 0;
 
@@ -26,12 +34,14 @@ private:
     double p_est_[4];
 
     static constexpr double dt              = app::dt;
-    double sigma_q_                         = 0.005;
-    double sigma_v_                         = 0;
-    static constexpr double sigma_v_storage = 3.001601789602848e-04;
-    static constexpr double sigma_a_        = 0.011081122012732;
+    double sigma_q_                         = 1;
+    double sigma_v_                         = 0.75;
+    static constexpr double sigma_v_normal  = 0.75;
+    static constexpr double sigma_v_parking = 0.1;
+    static constexpr double sigma_a_        = 1;
 
-    bool Is_slip_ = false;
+    bool Is_slip_   = false; // not using yet
+    bool Is_parking = false;
 
     double update_KF(const double z[2]) {
         static const int a[4]{1, 0, 0, 1};
