@@ -24,7 +24,7 @@ public:
         static auto instance = new DesireSet();
         return instance;
     }
-    static constexpr double spinning_velocity = -8.0;
+    static constexpr double spinning_velocity = 9.0;
     static constexpr double x_velocity_scale  = 2.5;
     void update() {
         using namespace device;
@@ -123,7 +123,7 @@ public:
                 }
                 break;
             case chassis_mode::spin_control:
-                set_states_desire(0, RC_->joystick_right.x() * 6);
+                set_states_desire(0, RC_->joystick_right.x() * spinning_velocity);
                 break;
             default: break;
             }
@@ -200,11 +200,12 @@ private:
         desires.xd(0, 0) = 0;       // distance :always 0 during velocity control
         desires.xd(1, 0) = x_d_ref; // velocity
         if (std::fabs(x_d_ref) > 1e-3)
-            IsControlling = true;
+            status_flag.IsControlling = true;
         else
-            IsControlling = false;
+            status_flag.IsControlling = false;
 
-        auto gimbal_yaw_angle = GM6020_yaw_->get_angle();
+        auto gimbal_yaw_angle  = GM6020_yaw_->get_angle();
+        status_flag.IsSpinning = false;
         switch (chassis_mode_) {    // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
@@ -219,7 +220,12 @@ private:
                 IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi * 1.5);
             break;
         case chassis_mode::spin:
-        case chassis_mode::spin_control: desires.xd(2, 0) += rotation_velocity * dt; break;
+        case chassis_mode::spin_control: {
+            desires.xd(2, 0) += rotation_velocity * dt;
+            desires.xd(3, 0)       = rotation_velocity;
+            status_flag.IsSpinning = true;
+            break;
+        }
         default: break;
         }
         for (uint8_t i = 3; i < 10; i++) {
@@ -232,9 +238,10 @@ private:
         desires.leg_length = std::clamp(desires.leg_length, 0.12, 0.27);
     }
     void set_roll_desire() {
-        // constexpr double roll_scale = 0.5;
-        // auto roll_control           = *thumb_wheel_ > 0.05 ? *thumb_wheel_ : 0.0;
-        // *roldesire.leg_lentgh               = roll_control * roll_scale;
+        // constexpr double roll_scale = 0.3;
+        // auto control                = RC_->dial;
+        // auto roll_control           = control > 0.05 ? control : 0.0; // deadband
+        // desires.roll                = roll_control * roll_scale;
         desires.roll = 0.0;
     }
     void reset_all_controls() {

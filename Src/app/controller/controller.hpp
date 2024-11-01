@@ -161,7 +161,11 @@ private:
     }
     void kinematic_controller() {
         double lqr_k[40];
-        LQR_k(leg_length_->L, leg_length_->R, lqr_k);
+        if (status_flag.IsSpinning)
+            LQR_k_spin(leg_length_->L, leg_length_->R, lqr_k);
+        else
+            LQR_k(leg_length_->L, leg_length_->R, lqr_k);
+
         Eigen::Map<Eigen::Matrix<double, 4, 10, Eigen::ColMajor>> LQR_gain(lqr_k);
 
         Eigen::Matrix<double, 10, 1> e_mat = -1.0 * (*xd_ - *x_states_);

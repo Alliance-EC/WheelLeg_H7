@@ -184,11 +184,11 @@ private:
         auto s_bd     = s_dot + (v_ll + v_lr) / 2;
         double z[2]   = {s_bd, IMU_->output_vector.accel_b.x()};
         auto s_bd_est = velocity_kalman_.update(z);
-        velocity_ = s_bd_est;
+        velocity_     = s_bd_est;
 
-        if (!IsControlling && std::fabs(s_dot) < 1e-2) { // 等待验证
+        if (!status_flag.IsControlling && std::fabs(s_dot) < 1e-2) { // 等待验证
             parking_mode_ = true;
-        } else if (IsControlling) {
+        } else if (status_flag.IsControlling) {
             parking_mode_ = false;
         }
 
