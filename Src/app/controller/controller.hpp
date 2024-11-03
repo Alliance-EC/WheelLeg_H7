@@ -40,6 +40,7 @@ public:
                 stop_all_control();
                 break;
             }
+            jumping_fsm();
             kinematic_controller();
             anti_fall_check();
             leg_controller();
@@ -73,6 +74,16 @@ private:
     static constexpr double inf = std::numeric_limits<double>::infinity();
     static constexpr double nan = std::numeric_limits<double>::quiet_NaN();
 
+    enum class jump_stage : uint8_t {
+        ready_to_jump = 0,
+        prepare_to_jump,
+        contracting_legs,
+        extending_legs,
+        contracting_legs_air,
+        prepare_landing,
+        finish
+    };
+
     double F_l_ = 0, F_r_ = 0;
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
     double T_lwl_compensate_ = 0, T_lwr_compensate_ = 0;
@@ -100,20 +111,93 @@ private:
     device::SuperCap* SuperCap_             = nullptr;
     module::referee::Status* referee_       = nullptr;
 
-    const Eigen::Matrix<double, 10, 1>* xd_       = &desire_->desires.xd;
+    Eigen::Matrix<double, 10, 1>* xd_ = &desire_->desires.xd;    // will be modified by jumping_fsm
     const Eigen::Matrix<double, 10, 1>* x_states_ = &observer_->x_states_;
     const observer::leg_length* leg_length_       = &observer_->leg_length_;
-    const double* length_desire_                  = &desire_->desires.leg_length;
-    const double* roll_desire_                    = &desire_->desires.roll;
+    double* length_desire_     = &desire_->desires.leg_length;   // will be modified by jumping_fsm
+    const double* roll_desire_ = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = &chassis_mode_;
+
+    jump_stage jump_stage_ = jump_stage::ready_to_jump;
+
+    void jumping_fsm() {
+        static PID_params pid_length_param_storage   = pid_length_.GetParams();
+        static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
+        auto leg_length                              = (leg_length_->L + leg_length_->R) / 2.0;
+
+        switch (jump_stage_) {
+        case jump_stage::ready_to_jump: {
+            if (status_flag.stand_jump_cmd)
+                jump_stage_ = jump_stage::prepare_to_jump;
+            if (status_flag.moving_jump_cmd)
+                jump_stage_ = jump_stage::contracting_legs;
+            break;
+        }
+        case jump_stage::prepare_to_jump: {
+            constexpr double ideal_leg_angle = 0.5;
+            (*xd_)(4, 0) = (*xd_)(6, 0) = ideal_leg_angle;
+            auto error_L                = ideal_leg_angle - (*x_states_)(4, 0);
+            auto error_R                = ideal_leg_angle - (*x_states_)(6, 0);
+
+            if (fabs(error_L) < 0.2 && fabs(error_R) < 0.2) {
+                jump_stage_ = jump_stage::contracting_legs;
+                break;
+            }
+        }
+        case jump_stage::contracting_legs: {
+            *length_desire_             = 0.10;
+            observer_->status_levitate_ = false;
+            if (leg_length < 0.13) {
+                jump_stage_ = jump_stage::extending_legs;
+            }
+            break;
+        }
+        case jump_stage::extending_legs: {
+            pid_length_.ChangeParams({50, 0, 0, 50, 0, 0});
+            pid_length_d_.ChangeParams({200, 0, 0, 1000, 0, 0}); // for fast leg movement
+            *length_desire_ = 0.35;
+
+            if (leg_length > 0.32) {
+                jump_stage_ = jump_stage::contracting_legs_air;
+            }
+            break;
+        }
+        case jump_stage::contracting_legs_air: {
+            *length_desire_ = 0.14;
+            observer_->status_levitate_ = true;
+            if (leg_length < 0.15) {
+                jump_stage_ = jump_stage::prepare_landing;
+            }
+            break;
+        }
+        case jump_stage::prepare_landing: {
+            observer_->status_levitate_ = true;
+
+            if (leg_length < 0.13) {
+                pid_length_.ChangeParams(pid_length_param_storage);
+                pid_length_d_.ChangeParams(pid_length_d_param_storage); // restore to normal
+                jump_stage_ = jump_stage::finish;
+            }
+            break;
+        }
+        case jump_stage::finish: {
+            observer_->status_levitate_ = false;
+            jump_stage_                 = jump_stage::ready_to_jump;
+            status_flag.stand_jump_cmd  = false;
+            status_flag.moving_jump_cmd = false;
+            break;
+        }
+        default: break;
+        }
+    }
 
     void anti_fall_check() {
         if (fabs(imu_euler->y()) > (0.1 + observer_->leg_length_avg_ * 0.5)) {
             about_to_fall_ = true;
             fall_resume_timer_.reload();
         }
-        if (observer_->status_levitate_) // 腾空状态不会触发
+        if (observer_->status_levitate_)                                // 腾空状态不会触发
             about_to_fall_ = false;
     }
     void fall_resume() { about_to_fall_ = false; }
@@ -203,8 +287,8 @@ private:
         static PID_params pid_roll_d_param_storage = pid_roll_d_.GetParams();
         static chassis_mode last_mode              = chassis_mode::stop;
         if (last_mode != chassis_mode::spin_control && *mode_ == chassis_mode::spin_control) {
-            pid_roll_.ChangeParams({1500, 0, 0, 500, 0.0, 0.0, dt});
-            pid_roll_d_.ChangeParams({45, 0, 0, 500, 0.0, 0.0, dt});
+            pid_roll_.ChangeParams({1500, 0, 0, 500, 0, 0});
+            pid_roll_d_.ChangeParams({45, 0, 0, 500, 0, 0});
         } else if (
             last_mode == chassis_mode::spin_control && *mode_ != chassis_mode::spin_control) {
             pid_roll_.ChangeParams(pid_roll_param_storage);
