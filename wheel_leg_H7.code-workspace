@@ -1,0 +1,14 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "cortex-debug.variableUseNaturalFormat": true,
+        "clangd.arguments": [
+            "--header-insertion=never"
+        ]
+    },
+    "extensions": {}
+}
