@@ -57,16 +57,16 @@ private:
     void BandStopFilter_init_5rd_order(
         uint32_t low_cutoff_freq, uint32_t high_cutoff_freq, uint32_t fs) {
         _Czh.a[0] = 1;
-        _Czh.a[1] = -3.8757887357962;
-        _Czh.a[2] = 5.69413413226172;
-        _Czh.a[3] = -3.75707783427488;
-        _Czh.a[4] = 0.939694595124759;
+        _Czh.a[1] = -3.83173424960587;
+        _Czh.a[2] = 5.54963588823307;
+        _Czh.a[3] = -3.60044303496303;
+        _Czh.a[4] = 0.88302608655344;
 
-        _Czh.b[0] = 0.969378344717883;
-        _Czh.b[1] = -3.81643328503553;
-        _Czh.b[2] = 5.69507203795068;
-        _Czh.b[3] = -3.81643328503553;
-        _Czh.b[4] = 0.969378344717883;
+        _Czh.b[0] = 0.939692914565668;
+        _Czh.b[1] = 3.71608864228446;
+        _Czh.b[2] = 5.55327614565519;
+        _Czh.b[3] = -3.71608864228446;
+        _Czh.b[4] = 0.939692914565667;
         // memset(_Czh.filter_signal, 0, sizeof(_Czh.filter_signal));
         // memset(_Czh.signal, 0, sizeof(_Czh.signal));
     }

@@ -311,8 +311,7 @@ private:
         if (last_mode != chassis_mode::spin_control && *mode_ == chassis_mode::spin_control) {
             pid_roll_.ChangeParams({1500, 0, 0, 500, 0, 0});
             pid_roll_d_.ChangeParams({45, 0, 0, 500, 0, 0});
-        } else if (
-            last_mode == chassis_mode::spin_control && *mode_ != chassis_mode::spin_control) {
+        } else if (last_mode == chassis_mode::spin_control && *mode_ != chassis_mode::spin_control) {
             pid_roll_.ChangeParams(pid_roll_param_storage);
             pid_roll_d_.ChangeParams(pid_roll_d_param_storage);
         }
@@ -390,8 +389,8 @@ private:
 
         watch_data_u[2] = control_torque_.wheel_L;
         watch_data_u[3] = control_torque_.wheel_R;
-        // watch_data_u[2] = T_l_BSF.update(watch_data_u[2]);
-        // watch_data_u[3] = T_r_BSF.update(watch_data_u[3]);
+        watch_data_u[2] = T_l_BSF.update(watch_data_u[2]);
+        watch_data_u[3] = T_r_BSF.update(watch_data_u[3]);
     }
 
     void stop_all_control() {
