@@ -15,6 +15,7 @@
 #include <cmath>
 #include <limits>
 double watch_data_xstates[10]={};
+double watch_data_xd[10]={};
 double watch_data_u[4]={};
 
 namespace app::controller {
@@ -62,6 +63,18 @@ public:
             watch_data_xstates[7] = (*x_states_)(7,0);
             watch_data_xstates[8] = (*x_states_)(8,0);
             watch_data_xstates[9] = (*x_states_)(9,0);
+
+            watch_data_xd[0] = (*xd_)(0,0);
+            watch_data_xd[1] = (*xd_)(1,0);
+            watch_data_xd[2] = (*xd_)(2,0);
+            watch_data_xd[3] = (*xd_)(3,0);
+            watch_data_xd[4] = (*xd_)(4,0);
+            watch_data_xd[5] = (*xd_)(5,0);
+            watch_data_xd[6] = (*xd_)(6,0);
+            watch_data_xd[7] = (*xd_)(7,0);
+            watch_data_xd[8] = (*xd_)(8,0);
+            watch_data_xd[9] = (*xd_)(9,0);
+
             watch_data_u[0]=u_mat(0,0);
             watch_data_u[1]=u_mat(1,0);
             // watch_data_u[2]=u_mat(2,0);
