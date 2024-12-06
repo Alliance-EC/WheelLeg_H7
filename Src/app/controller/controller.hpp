@@ -17,6 +17,7 @@
 double watch_data_xstates[10]={};
 double watch_data_xd[10]={};
 double watch_data_u[4]={};
+double watch_data_motor_speed[6]={};
 
 namespace app::controller {
 using namespace tool;
@@ -77,6 +78,13 @@ public:
 
             watch_data_u[0]=u_mat(0,0);
             watch_data_u[1]=u_mat(1,0);
+
+            watch_data_motor_speed[0] = DM8009_[leg_LF]->get_velocity();
+            watch_data_motor_speed[1] = DM8009_[leg_RF]->get_velocity();
+            watch_data_motor_speed[2] = DM8009_[leg_LB]->get_velocity();
+            watch_data_motor_speed[3] = DM8009_[leg_RB]->get_velocity();
+            watch_data_motor_speed[4] = M3508_[wheel_L]->get_velocity();
+            watch_data_motor_speed[5] = M3508_[wheel_R]->get_velocity();
             // watch_data_u[2]=u_mat(2,0);
             // watch_data_u[3]=u_mat(3,0);
         } while (false);
@@ -115,7 +123,6 @@ private:
         prepare_landing,
         finish
     };
-
     double F_l_ = 0, F_r_ = 0;
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
     double T_lwl_compensate_ = 0, T_lwr_compensate_ = 0;

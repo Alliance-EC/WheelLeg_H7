@@ -107,8 +107,9 @@ private:
     Eigen::Vector<double, 4>* u_mat_ = nullptr;
     // kalman_observer kalman_observer_ = {};
 
-    tool::filter::BandStopFilter angle_Ld_BSF_ = tool::filter::BandStopFilter(25, 32, 1000, 3);
-    tool::filter::BandStopFilter angle_Rd_BSF_ = tool::filter::BandStopFilter(25, 32, 1000, 3);
+    //带阻滤波器，试了没用
+    // tool::filter::BandStopFilter angle_Ld_BSF_ = tool::filter::BandStopFilter(25, 32, 1000, 3);
+    // tool::filter::BandStopFilter angle_Rd_BSF_ = tool::filter::BandStopFilter(25, 32, 1000, 3);
     
     tool::filter::LowPassFilter angle_Ld_LPF_ = tool::filter::LowPassFilter(100);
     tool::filter::LowPassFilter angle_Rd_LPF_ = tool::filter::LowPassFilter(100);
@@ -142,7 +143,7 @@ private:
         theta_Ld_    = (theta_L_ - last_theta_L) / dt_;         // 6 theta_lld
 
         watch_data_bsf[0] = theta_Ld_;
-        watch_data_bsf[0] = angle_Ld_BSF_.update(watch_data_bsf[0]);
+        // watch_data_bsf[0] = angle_Ld_BSF_.update(watch_data_bsf[0]);
 
         theta_Ld_    = angle_Ld_LPF_.update(theta_Ld_);
         last_theta_L = theta_L_;
@@ -167,7 +168,7 @@ private:
         theta_Rd_    = (theta_R_ - last_theta_R) / dt_;         // 8 theta_lrd
 
         watch_data_bsf[1]=theta_Rd_;
-        watch_data_bsf[1] = angle_Rd_BSF_.update(watch_data_bsf[1]);
+        // watch_data_bsf[1] = angle_Rd_BSF_.update(watch_data_bsf[1]);
 
         theta_Rd_    = angle_Rd_LPF_.update(theta_Rd_);
         last_theta_R = theta_R_;
