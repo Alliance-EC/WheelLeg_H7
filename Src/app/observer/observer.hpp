@@ -14,6 +14,7 @@
 #include <limits>
 
 double watch_data_bsf[2]={};
+double watch_leglenth[2]={};
 namespace app::observer {
 struct leg_length {
     double L;
@@ -183,6 +184,8 @@ private:
         last_length_Rd  = leg_length_.Rd;
 
         leg_length_avg_ = (leg_length_.L + leg_length_.R) / 2.0f;
+        watch_leglenth[0]=leg_length_.L;
+        watch_leglenth[1]=leg_length_.R;
     }
 
     void wheel_update() {

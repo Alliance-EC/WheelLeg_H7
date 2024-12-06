@@ -8,17 +8,17 @@ CompileFlags:
         - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\lib\gcc\arm-none-eabi\13.3.1\include
         - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\lib\gcc\arm-none-eabi\13.3.1\include-fixed
         - -Ic:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\arm-none-eabi\include
-        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1
-        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1\arm-none-eabi\thumb\v7e-m+dp\hard
-        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1\backward
-        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\lib\gcc\arm-none-eabi\12.3.1\include
-        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\lib\gcc\arm-none-eabi\12.3.1\include-fixed
-        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include
         - -Id:\program files\arm\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1
         - -Id:\program files\arm\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1\arm-none-eabi\thumb\v7e-m+dp\hard
         - -Id:\program files\arm\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1\backward
         - -Id:\program files\arm\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\lib\gcc\arm-none-eabi\12.3.1\include
         - -Id:\program files\arm\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\lib\gcc\arm-none-eabi\12.3.1\include-fixed
         - -Id:\program files\arm\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include
+        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1
+        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1\arm-none-eabi\thumb\v7e-m+dp\hard
+        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include\c++\12.3.1\backward
+        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\lib\gcc\arm-none-eabi\12.3.1\include
+        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\lib\gcc\arm-none-eabi\12.3.1\include-fixed
+        - -Id:\robomaster\gcc 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\arm-none-eabi\include
     CompilationDatabase: ./build/Debug
-    Compiler: D:\Program Files\arm\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\bin\arm-none-eabi-g++.exe
+    Compiler: D:\Robomaster\GCC 1\arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi\bin\arm-none-eabi-g++.exe

@@ -16,6 +16,7 @@
 #include <limits>
 double watch_data_xstates[10]={};
 double watch_data_xd[10]={};
+double watch_data_error[10]={};
 double watch_data_u[4]={};
 double watch_data_motor_speed[6]={};
 
@@ -79,12 +80,10 @@ public:
             watch_data_u[0]=u_mat(0,0);
             watch_data_u[1]=u_mat(1,0);
 
-            watch_data_motor_speed[0] = DM8009_[leg_LF]->get_velocity();
-            watch_data_motor_speed[1] = DM8009_[leg_RF]->get_velocity();
-            watch_data_motor_speed[2] = DM8009_[leg_LB]->get_velocity();
-            watch_data_motor_speed[3] = DM8009_[leg_RB]->get_velocity();
-            watch_data_motor_speed[4] = M3508_[wheel_L]->get_velocity();
-            watch_data_motor_speed[5] = M3508_[wheel_R]->get_velocity();
+            watch_data_motor_speed[0] = DM8009_[leg_LB]->get_angle();
+            watch_data_motor_speed[1] = DM8009_[leg_RB]->get_angle();
+            watch_data_motor_speed[2] = DM8009_[leg_LF]->get_angle();
+            watch_data_motor_speed[3] = DM8009_[leg_RF]->get_angle();
             // watch_data_u[2]=u_mat(2,0);
             // watch_data_u[3]=u_mat(3,0);
         } while (false);
@@ -295,6 +294,18 @@ private:
         Eigen::Map<Eigen::Matrix<double, 4, 10, Eigen::ColMajor>> LQR_gain(lqr_k);
 
         Eigen::Matrix<double, 10, 1> e_mat = -1.0 * (*xd_ - *x_states_);
+
+        watch_data_error[0] = (e_mat)(0,0);
+            watch_data_error[1] = (e_mat)(1,0);
+            watch_data_error[2] = (e_mat)(2,0);
+            watch_data_error[3] = (e_mat)(3,0);
+            watch_data_error[4] = (e_mat)(4,0);
+            watch_data_error[5] = (e_mat)(5,0);
+            watch_data_error[6] = (e_mat)(6,0);
+            watch_data_error[7] = (e_mat)(7,0);
+            watch_data_error[8] = (e_mat)(8,0);
+            watch_data_error[9] = (e_mat)(9,0);
+            
         if (observer_->status_levitate_) { // 腾空状态仅保持腿部竖直
             e_mat(0, 0) = 0;
             e_mat(1, 0) = 0;
