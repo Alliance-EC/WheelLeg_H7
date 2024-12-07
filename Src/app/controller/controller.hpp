@@ -18,7 +18,7 @@ double watch_data_xstates[10]={};
 double watch_data_xd[10]={};
 double watch_data_error[10]={};
 double watch_data_u[4]={};
-uint16_t watch_data_states[2]={};
+double watch_data_states[2]={5,5};
 
 namespace app::controller {
 using namespace tool;
@@ -419,7 +419,12 @@ private:
         control_torque_.leg_RF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
 
-        watch_data_states[0] = wheel_vibrate_detecting(control_torque_.wheel_L);
+        if (wheel_vibrate_detecting(control_torque_.wheel_L)>10){
+            if (watch_data_states[0]>1.2)
+                watch_data_states[0] -= 0.1;
+        } else if (wheel_vibrate_detecting(control_torque_.wheel_L) <5) {
+            watch_data_states[0]=5;
+        }
         watch_data_states[1] = wheel_vibrate_detecting(control_torque_.wheel_R);
         watch_data_u[2] = control_torque_.wheel_L;
         watch_data_u[3] = T_lwl_;
