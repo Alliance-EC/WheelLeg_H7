@@ -445,7 +445,7 @@ private:
         control_torque_.wheel_L  = (x_speed - rotation_velocity * R_l) / Rw;
         control_torque_.wheel_R  = (x_speed + rotation_velocity * R_l) / Rw;
     }
-    uint16_t wheel_vibrate_detecting(double wheel_torque) {
+    static uint16_t wheel_vibrate_detecting(double wheel_torque) {
         static double last_torque =0.0;
         static double torque =0.0;
         static uint16_t cnt=0;
