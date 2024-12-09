@@ -16,6 +16,7 @@
 #include <limits>
 double watch_data_xstates[10]={};
 double watch_data_xd[10]={};
+double watch_data_speed[10]={};
 double watch_data_error[10]={};
 double watch_data_u[4]={};
 double watch_data_states[2]={5,5};
@@ -77,7 +78,8 @@ public:
             watch_data_xd[7] = (*xd_)(7,0);
             watch_data_xd[8] = (*xd_)(8,0);
             watch_data_xd[9] = (*xd_)(9,0);
-
+            watch_data_speed[0]=M3508_[wheel_L]->get_velocity();
+            watch_data_speed[1]=M3508_[wheel_R]->get_velocity();
             // watch_data_u[0]=u_mat(0,0);
             // watch_data_u[1]=u_mat(1,0);
 
@@ -395,11 +397,11 @@ private:
         control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
         control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
         watch_data_u[0]=1;
-        if (abs((*x_states_)(4,0))<0.15 && abs((*x_states_)(6,0))<0.15){
-            control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel_balance, max_torque_wheel_balance);
-            control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel_balance, max_torque_wheel_balance);
-            watch_data_u[0]=2;
-        }
+        // if (abs((*x_states_)(4,0))<0.15 && abs((*x_states_)(6,0))<0.15){
+        //     control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel_balance, max_torque_wheel_balance);
+        //     control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel_balance, max_torque_wheel_balance);
+        //     watch_data_u[0]=2;
+        // }
         // control_torque_.wheel_L           = T_l_BSF.update(control_torque_.wheel_L);
         // control_torque_.wheel_R           = T_r_BSF.update(control_torque_.wheel_R);
         // control_torque_.wheel_L           = std::clamp(control_torque_.wheel_L, -max_torque_wheel, max_torque_wheel);

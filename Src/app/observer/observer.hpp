@@ -15,6 +15,7 @@
 
 double watch_data_bsf[2]={};
 double watch_leglenth[2]={};
+double support=0.0;
 namespace app::observer {
 struct leg_length {
     double L;
@@ -245,6 +246,7 @@ private:
         constexpr double force_levitate = 20.0;
         constexpr double force_normal   = 50.0;
         auto support_force_avg          = (support_force_.L + support_force_.R) / 2.0;
+        support=support_force_avg;
         if ((support_force_avg < force_levitate) && allow_levitate_
             && (*chassis_mode_ != chassis_mode::stop)
             && (*chassis_mode_ != chassis_mode::balanceless)) {
