@@ -19,7 +19,7 @@ double watch_data_xd[10]={};
 double watch_data_error[10]={};
 double watch_data_u[4]={};
 double watch_data_states[2]={5,5};
-
+bool watch_fall=false;
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -50,6 +50,7 @@ public:
             jumping_fsm();
             kinematic_controller();
             anti_fall_check();
+            watch_fall = about_to_fall_;
             leg_controller();
             // wheel_model_hat();
             leg_split_corrector();
@@ -226,7 +227,7 @@ private:
         default: break;
         }
     }
-
+    //倾角过大，判定要翻倒
     void anti_fall_check() {
         if (fabs(imu_euler->y()) > (0.1 + observer_->leg_length_avg_ * 0.5)) {
             about_to_fall_ = true;
