@@ -21,6 +21,7 @@ double watch_data_speedhat[2]={};
 double watch_data_error[10]={};
 double watch_data_u[4]={};
 double watch_data_states[2]={5,5};
+double watch_lenth[2]={};
 bool watch_fall=false;
 namespace app::controller {
 using namespace tool;
@@ -131,7 +132,7 @@ private:
     double wheel_compensate_kp_ = 0.25;
     PID pid_roll_               = PID({300, 0, 0, 500, 0.0, 0.0, dt});
     PID pid_roll_d_             = PID({30, 0, 0, 500, 0.0, 0.0, dt});
-    PID pid_length_             = PID({10, 0, 0, 10, 100.0, 0.0, dt});
+    PID pid_length_             = PID({25, 0, 0, 8, 100.0, 0.0, dt});
     PID pid_length_d_           = PID({150, 0, 0, 500, 100.0, 0.0, dt});
 
     PID wheel_L_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
@@ -303,7 +304,6 @@ private:
             watch_data_error[7] = (e_mat)(7,0);
             watch_data_error[8] = (e_mat)(8,0);
             watch_data_error[9] = (e_mat)(9,0);
-            
         if (observer_->status_levitate_) { // 腾空状态仅保持腿部竖直
             e_mat(0, 0) = 0;
             e_mat(1, 0) = 0;
@@ -350,6 +350,8 @@ private:
         auto roll_angle_out  = pid_roll_.update(roll_desire, observer_->roll_);
         auto roll_angled_out = pid_roll_d_.update(0, observer_->roll_d_);
         auto F_roll          = roll_angle_out + roll_angled_out;
+        watch_lenth[0]=length;
+        watch_lenth[1]=length_desire;
 
         F_l_ = F_length + F_roll + gravity_ff() - inertial_ff();
         F_r_ = F_length - F_roll + gravity_ff() + inertial_ff();
