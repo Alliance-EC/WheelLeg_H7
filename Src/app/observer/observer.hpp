@@ -15,7 +15,10 @@
 
 double watch_data_bsf[2]={};
 double watch_leglenth[2]={};
-double support=0.0;
+double watch_Fn[2]={};
+double support[2]={};
+bool parking =false;
+bool is_support =false;
 namespace app::observer {
 struct leg_length {
     double L;
@@ -28,6 +31,10 @@ struct leg_length {
 struct support_force {
     double L;
     double R;
+    double L_d;
+    double R_d;
+    double L_last;
+    double R_last;
 };
 class observer {
 public:
@@ -100,7 +107,10 @@ private:
     const chassis_mode* chassis_mode_       = &app::chassis_mode_;
     tool::daemon levitate_allow_timer_ =
         tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
-
+    tool::daemon left_levitate_allow_timer_ =
+        tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
+    tool::daemon right_levitate_allow_timer_ =
+        tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
     double dt_ = app::dt;
     uint32_t last_time;
     bool allow_levitate_              = true;
@@ -208,7 +218,7 @@ private:
         } else if (status_flag.IsControlling) {
             parking_mode_ = false;
         }
-
+        parking=parking_mode_;
         if (parking_mode_) { // when the robot is not moving, change to distance control
             velocity_kalman_.set_parking();
             distance_ += velocity_ * dt_;
@@ -229,7 +239,11 @@ private:
                        + 2 * leg_length_.Ld * std::sin(theta_L_) * theta_Ld_
                        + leg_length_.L * std::cos(theta_L_) * theta_Ld_ * theta_Ld_
                        + leg_length_.L * std::sin(theta_L_) * theta_Ldd_;
+        support_force_.L_last=support_force_.L;
         support_force_.L = P_l + z_wl_ddot * m_w;
+        support_force_.L_d=support_force_.L-support_force_.L_last;
+        watch_Fn[0]=support_force_.L_d;
+        support[0]=support_force_.L;
         leg_conv_reverse(
             DM8009_[leg_RF]->get_torque(), DM8009_[leg_RB]->get_torque(),
             DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), data);
@@ -240,13 +254,17 @@ private:
                        + 2 * leg_length_.Rd * std::sin(theta_R_) * theta_Rd_
                        + leg_length_.R * std::cos(theta_R_) * theta_Rd_ * theta_Rd_
                        + leg_length_.R * std::sin(theta_R_) * theta_Rdd_;
-        support_force_.R = P_r + z_wr_ddot * m_w;
+        support_force_.R_last=support_force_.R;
+        support_force_.R = P_l + z_wl_ddot * m_w;
+        support_force_.R_d=support_force_.R-support_force_.R_last;
+        watch_Fn[1]=support_force_.R_d;
+        support[1]=support_force_.R;
+
     }
     void levitate_detect() {
-        constexpr double force_levitate = 20.0;
-        constexpr double force_normal   = 50.0;
+        constexpr double force_levitate = 45.0;
+        constexpr double force_normal   = 55.0;
         auto support_force_avg          = (support_force_.L + support_force_.R) / 2.0;
-        support=support_force_avg;
         if ((support_force_avg < force_levitate) && allow_levitate_
             && (*chassis_mode_ != chassis_mode::stop)
             && (*chassis_mode_ != chassis_mode::balanceless)) {
@@ -260,7 +278,7 @@ private:
             }
             status_levitate_ = false;
         }
-
+        is_support=status_levitate_;
         if (status_levitate_)
             reset_persistent_data();
     }
@@ -271,5 +289,4 @@ private:
     }
     void reset_levitate_allowance() { allow_levitate_ = true; }
 };
-
 } // namespace app::observer

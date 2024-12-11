@@ -16,7 +16,8 @@
 #include <limits>
 double watch_data_xstates[10]={};
 double watch_data_xd[10]={};
-double watch_data_speed[10]={};
+double watch_data_speed[2]={};
+double watch_data_speedhat[2]={};
 double watch_data_error[10]={};
 double watch_data_u[4]={};
 double watch_data_states[2]={5,5};
@@ -396,7 +397,7 @@ private:
         constexpr double max_torque_wheel_balance = 2.0f;
         control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
         control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
-        watch_data_u[0]=1;
+        // watch_data_u[0]=1;
         // if (abs((*x_states_)(4,0))<0.15 && abs((*x_states_)(6,0))<0.15){
         //     control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel_balance, max_torque_wheel_balance);
         //     control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel_balance, max_torque_wheel_balance);
@@ -422,14 +423,8 @@ private:
         control_torque_.leg_RF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
 
-        if (wheel_vibrate_detecting(control_torque_.wheel_L)>10){
-            if (watch_data_states[0]>1.2)
-                watch_data_states[0] -= 0.1;
-        } else if (wheel_vibrate_detecting(control_torque_.wheel_L) <5) {
-            watch_data_states[0]=5;
-        }
-        watch_data_states[1] = wheel_vibrate_detecting(control_torque_.wheel_R);
         watch_data_u[2] = control_torque_.wheel_L;
+        watch_data_speedhat[0]+=control_torque_.wheel_L*0.001;
         watch_data_u[3] = T_lwl_;
         // watch_data_u[2] = T_l_BSF.update(watch_data_u[2]);
         // watch_data_u[3] = T_r_BSF.update(watch_data_u[3]);
