@@ -16,13 +16,12 @@
 #include <limits>
 double watch_data_xstates[10]={};
 double watch_data_xd[10]={};
-double watch_data_speed[2]={};
-double watch_data_speedhat[2]={};
 double watch_data_error[10]={};
 double watch_data_u[4]={};
-double watch_data_states[2]={5,5};
-double watch_lenth[2]={};
+
+double watch_data_speed[2]={};
 bool watch_fall=false;
+
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -351,8 +350,6 @@ private:
         auto roll_angle_out  = pid_roll_.update(roll_desire, observer_->roll_);
         auto roll_angled_out = pid_roll_d_.update(0, observer_->roll_d_);
         auto F_roll          = roll_angle_out + roll_angled_out;
-        watch_lenth[0]=length;
-        watch_lenth[1]=length_desire;
 
         F_l_ = F_length + F_roll + gravity_ff() - inertial_ff();
         F_r_ = F_length - F_roll + gravity_ff() + inertial_ff();
@@ -428,7 +425,6 @@ private:
 
         watch_data_u[1] = control_torque_.wheel_R;
         watch_data_u[0] = control_torque_.wheel_L;
-        // watch_data_speedhat[0]+=control_torque_.wheel_L*0.001;
         watch_data_u[2] = T_lwl_;
         watch_data_u[3] = T_lwr_;
         // watch_data_u[2] = T_l_BSF.update(watch_data_u[2]);
