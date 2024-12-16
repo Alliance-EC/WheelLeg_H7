@@ -81,8 +81,6 @@ public:
             watch_data_xd[9] = (*xd_)(9,0);
             watch_data_speed[0]=M3508_[wheel_L]->get_velocity();
             watch_data_speed[1]=M3508_[wheel_R]->get_velocity();
-            // watch_data_u[0]=u_mat(0,0);
-            // watch_data_u[1]=u_mat(1,0);
 
         } while (false);
     }
@@ -294,7 +292,7 @@ private:
 
         Eigen::Matrix<double, 10, 1> e_mat = -1.0 * (*xd_ - *x_states_);
 
-        watch_data_error[0] = (e_mat)(0,0);
+            watch_data_error[0] = (e_mat)(0,0);
             watch_data_error[1] = (e_mat)(1,0);
             watch_data_error[2] = (e_mat)(2,0);
             watch_data_error[3] = (e_mat)(3,0);
@@ -394,19 +392,8 @@ private:
         }
 
         constexpr double max_torque_wheel = 5.0f;
-        // constexpr double max_torque_wheel_balance = 2.0f;
         control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
         control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
-        // watch_data_u[0]=1;
-        // if (abs((*x_states_)(4,0))<0.15 && abs((*x_states_)(6,0))<0.15){
-        //     control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel_balance, max_torque_wheel_balance);
-        //     control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel_balance, max_torque_wheel_balance);
-        //     watch_data_u[0]=2;
-        // }
-        // control_torque_.wheel_L           = T_l_BSF.update(control_torque_.wheel_L);
-        // control_torque_.wheel_R           = T_r_BSF.update(control_torque_.wheel_R);
-        // control_torque_.wheel_L           = std::clamp(control_torque_.wheel_L, -max_torque_wheel, max_torque_wheel);
-        // control_torque_.wheel_R           = std::clamp(control_torque_.wheel_R, -max_torque_wheel, max_torque_wheel);
         if (*mode_ != chassis_mode::balanceless) {
             control_torque_.wheel_L *= -1;
             control_torque_.wheel_R *= -1;
@@ -423,12 +410,10 @@ private:
         control_torque_.leg_RF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
 
-        watch_data_u[1] = control_torque_.wheel_R;
         watch_data_u[0] = control_torque_.wheel_L;
+        watch_data_u[1] = control_torque_.wheel_R;
         watch_data_u[2] = T_lwl_;
         watch_data_u[3] = T_lwr_;
-        // watch_data_u[2] = T_l_BSF.update(watch_data_u[2]);
-        // watch_data_u[3] = T_r_BSF.update(watch_data_u[3]);
     }
 
     void stop_all_control() {
@@ -448,21 +433,6 @@ private:
         double rotation_velocity = std::clamp(10 * angle_error, -3.0, 3.0);
         control_torque_.wheel_L  = (x_speed - rotation_velocity * R_l) / Rw;
         control_torque_.wheel_R  = (x_speed + rotation_velocity * R_l) / Rw;
-    }
-    static uint16_t wheel_vibrate_detecting(double wheel_torque) {
-        static double last_torque =0.0;
-        static double torque =0.0;
-        static uint16_t cnt=0;
-        //update
-        last_torque =torque;
-        torque=wheel_torque;
-        if (last_torque*torque<0){
-            cnt++;
-        }
-        else {
-            cnt--;
-        }
-        return cnt;
     }
 };
 } // namespace app::controller
