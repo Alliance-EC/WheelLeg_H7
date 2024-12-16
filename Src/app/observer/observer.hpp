@@ -16,7 +16,7 @@
 double watch_data_bsf[2]={};
 double watch_leglenth[2]={};
 double watch_Fn[2]={};
-double support[2]={};
+double support[3]={};
 bool parking =false;
 bool is_support =false;
 namespace app::observer {
@@ -255,16 +255,16 @@ private:
                        + leg_length_.R * std::cos(theta_R_) * theta_Rd_ * theta_Rd_
                        + leg_length_.R * std::sin(theta_R_) * theta_Rdd_;
         support_force_.R_last=support_force_.R;
-        support_force_.R = P_l + z_wl_ddot * m_w;
+        support_force_.R = P_r + z_wr_ddot * m_w;
         support_force_.R_d=support_force_.R-support_force_.R_last;
         watch_Fn[1]=support_force_.R_d;
         support[1]=support_force_.R;
-
     }
     void levitate_detect() {
-        constexpr double force_levitate = 45.0;
-        constexpr double force_normal   = 55.0;
+        constexpr double force_levitate = 20.0;
+        constexpr double force_normal   = 50.0;
         auto support_force_avg          = (support_force_.L + support_force_.R) / 2.0;
+        support[2]=support_force_avg;
         if ((support_force_avg < force_levitate) && allow_levitate_
             && (*chassis_mode_ != chassis_mode::stop)
             && (*chassis_mode_ != chassis_mode::balanceless)) {

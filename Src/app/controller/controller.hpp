@@ -127,13 +127,14 @@ private:
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
     double wheel_speed_hat_[2]      = {};
     bool about_to_fall_             = false;
+    bool allow_re_stand             = false;
     tool::daemon fall_resume_timer_ = tool::daemon(0.5, std::bind(&Controller::fall_resume, this));
 
     double wheel_compensate_kp_ = 0.25;
     PID pid_roll_               = PID({300, 0, 0, 500, 0.0, 0.0, dt});
     PID pid_roll_d_             = PID({30, 0, 0, 500, 0.0, 0.0, dt});
-    PID pid_length_             = PID({25, 0, 0, 8, 100.0, 0.0, dt});
-    PID pid_length_d_           = PID({150, 0, 0, 500, 100.0, 0.0, dt});
+    PID pid_length_             = PID({12, 0, 0, 6, 100.0, 0.0, dt});
+    PID pid_length_d_           = PID({150, 0, 0, 400, 100.0, 0.0, dt});
 
     PID wheel_L_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
     PID wheel_R_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
@@ -233,7 +234,7 @@ private:
     }
     //倾角过大，判定要翻倒
     void anti_fall_check() {
-        if (fabs(imu_euler->y()) > (0.1 + observer_->leg_length_avg_ * 0.5)) {
+        if (fabs(imu_euler->y()) > (0.05 + observer_->leg_length_avg_ * 0.5)) {
             about_to_fall_ = true;
             fall_resume_timer_.reload();
         }
@@ -396,7 +397,7 @@ private:
         }
 
         constexpr double max_torque_wheel = 5.0f;
-        constexpr double max_torque_wheel_balance = 2.0f;
+        // constexpr double max_torque_wheel_balance = 2.0f;
         control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
         control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
         // watch_data_u[0]=1;
@@ -425,9 +426,11 @@ private:
         control_torque_.leg_RF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
 
-        watch_data_u[2] = control_torque_.wheel_L;
-        watch_data_speedhat[0]+=control_torque_.wheel_L*0.001;
-        watch_data_u[3] = T_lwl_;
+        watch_data_u[1] = control_torque_.wheel_R;
+        watch_data_u[0] = control_torque_.wheel_L;
+        // watch_data_speedhat[0]+=control_torque_.wheel_L*0.001;
+        watch_data_u[2] = T_lwl_;
+        watch_data_u[3] = T_lwr_;
         // watch_data_u[2] = T_l_BSF.update(watch_data_u[2]);
         // watch_data_u[3] = T_r_BSF.update(watch_data_u[3]);
     }
