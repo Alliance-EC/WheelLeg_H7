@@ -13,9 +13,7 @@
 #include <cmath>
 #include <limits>
 
-double watch_data_bsf[2]={};
 double watch_leglenth[2]={};
-double watch_Fn[2]={};
 double support[3]={};
 bool parking =false;
 bool is_support =false;
@@ -154,9 +152,6 @@ private:
 
         theta_Ld_    = (theta_L_ - last_theta_L) / dt_;         // 6 theta_lld
 
-        watch_data_bsf[0] = theta_Ld_;
-        // watch_data_bsf[0] = angle_Ld_BSF_.update(watch_data_bsf[0]);
-
         theta_Ld_    = angle_Ld_LPF_.update(theta_Ld_);
         last_theta_L = theta_L_;
 
@@ -178,9 +173,6 @@ private:
         theta_R_ = data[1] + imu_euler_->y();                   // 7 theta_lr
 
         theta_Rd_    = (theta_R_ - last_theta_R) / dt_;         // 8 theta_lrd
-
-        watch_data_bsf[1]=theta_Rd_;
-        // watch_data_bsf[1] = angle_Rd_BSF_.update(watch_data_bsf[1]);
 
         theta_Rd_    = angle_Rd_LPF_.update(theta_Rd_);
         last_theta_R = theta_R_;
@@ -242,8 +234,9 @@ private:
         support_force_.L_last=support_force_.L;
         support_force_.L = P_l + z_wl_ddot * m_w;
         support_force_.L_d=support_force_.L-support_force_.L_last;
-        watch_Fn[0]=support_force_.L_d;
+
         support[0]=support_force_.L;
+        
         leg_conv_reverse(
             DM8009_[leg_RF]->get_torque(), DM8009_[leg_RB]->get_torque(),
             DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), data);
@@ -257,7 +250,7 @@ private:
         support_force_.R_last=support_force_.R;
         support_force_.R = P_r + z_wr_ddot * m_w;
         support_force_.R_d=support_force_.R-support_force_.R_last;
-        watch_Fn[1]=support_force_.R_d;
+
         support[1]=support_force_.R;
     }
     void levitate_detect() {
