@@ -124,6 +124,7 @@ private:
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
     double wheel_speed_hat_[2]      = {};
     bool about_to_fall_             = false;
+    bool about_to_fall_last_             = false;
     bool allow_re_stand             = false;
     tool::daemon fall_resume_timer_ = tool::daemon(0.5, std::bind(&Controller::fall_resume, this));
 
@@ -158,7 +159,6 @@ private:
 
     tool::filter::BandStopFilter T_l_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
     tool::filter::BandStopFilter T_r_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
-
     void jumping_fsm() {
         static PID_params pid_length_param_storage   = pid_length_.GetParams();
         static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
@@ -231,6 +231,7 @@ private:
     }
     //倾角过大，判定要翻倒
     void anti_fall_check() {
+        about_to_fall_last_=about_to_fall_;
         if (fabs(imu_euler->y()) > (0.05 + observer_->leg_length_avg_ * 0.5)) {
             about_to_fall_ = true;
             fall_resume_timer_.reload();
@@ -238,7 +239,12 @@ private:
         if (observer_->status_levitate_)                                // 腾空状态不会触发
             about_to_fall_ = false;
     }
-    void fall_resume() { about_to_fall_ = false; }
+    void fall_resume() { 
+        about_to_fall_ = false;
+        if (about_to_fall_last_&&about_to_fall_==false){
+            status_flag.allow_to_climb=false;
+        }
+        }
 
     void super_cap_controller() {
         // Maximum excess power when buffer energy is sufficient.
@@ -386,7 +392,7 @@ private:
         T_bll_ += T_bll_compensate_;
         T_blr_ += T_blr_compensate_;
 
-        if (observer_->status_levitate_) {
+        if (observer_->status_levitate_ || (status_flag.allow_to_climb&&about_to_fall_)) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }

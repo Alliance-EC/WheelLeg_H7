@@ -58,6 +58,7 @@ static struct status_flags {
 // static bool IsControlling = false;
     bool stand_jump_cmd  : 1 = false;
     bool moving_jump_cmd : 1 = false;
+    bool allow_to_climb : 1 = false;    
 } status_flag;
 static chassis_mode chassis_mode_;
 } // namespace app

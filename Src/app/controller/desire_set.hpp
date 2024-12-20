@@ -139,8 +139,11 @@ public:
             //     status_flag.stand_jump_cmd = true;
             // else if (RC_->dial > 0.8)
             //     status_flag.moving_jump_cmd = true;
-                status_flag.stand_jump_cmd = false;
-            
+            if (RC_->dial < -0.8)
+                status_flag.allow_to_climb = true;
+            else if (RC_->dial > 0.8)
+                status_flag.allow_to_climb = true;
+
         } while (false);
         last_switch_right = RC_->switch_right;
         if (chassis_mode_ == chassis_mode::stop)
