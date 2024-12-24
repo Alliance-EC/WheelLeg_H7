@@ -7,7 +7,6 @@
 #include "tool/daemon/daemon.hpp"
 #include "tool/filter/OLS.hpp"
 #include "tool/filter/low_pass_filter.hpp"
-#include "tool/filter/band_stop_fliter.hpp"
 #include "velocity_kalman.hpp"
 #include <Eigen/Dense>
 #include <cmath>
@@ -16,7 +15,7 @@
 double watch_leglenth[2]={};
 double support[3]={};
 bool parking =false;
-bool is_support =false;
+bool watch_support =false;
 namespace app::observer {
 struct leg_length {
     double L;
@@ -81,6 +80,8 @@ public:
     leg_length leg_length_;
     support_force support_force_;
     bool status_levitate_;
+    bool status_levitate_L_;
+    bool status_levitate_R_;
     double roll_, roll_d_;
     double leg_length_avg_;
 
@@ -105,13 +106,15 @@ private:
     const chassis_mode* chassis_mode_       = &app::chassis_mode_;
     tool::daemon levitate_allow_timer_ =
         tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
-    tool::daemon left_levitate_allow_timer_ =
-        tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
-    tool::daemon right_levitate_allow_timer_ =
-        tool::daemon(1, std::bind(&observer::reset_levitate_allowance, this));
+    tool::daemon levitate_allow_timer_L_ =
+        tool::daemon(1, std::bind(&observer::reset_levitate_allowance_L, this));
+    tool::daemon levitate_allow_timer_R_ =
+        tool::daemon(1, std::bind(&observer::reset_levitate_allowance_R, this));
     double dt_ = app::dt;
     uint32_t last_time;
     bool allow_levitate_              = true;
+    bool allow_levitate_L_              = true;
+    bool allow_levitate_R_              = true;
     bool parking_mode_                = false;
     const Eigen::Vector3f *imu_accel_ = nullptr, *imu_gyro_ = nullptr, *imu_euler_ = nullptr;
     Eigen::Vector<double, 4>* u_mat_ = nullptr;
@@ -271,7 +274,35 @@ private:
             }
             status_levitate_ = false;
         }
-        is_support=status_levitate_;
+
+        if ((support_force_.L < force_levitate) && allow_levitate_L_
+            && (*chassis_mode_ != chassis_mode::stop)
+            && (*chassis_mode_ != chassis_mode::balanceless)) {
+            status_levitate_L_ = true;
+        } else if (
+            (support_force_.L > force_normal) && (*chassis_mode_ != chassis_mode::stop)
+            && (*chassis_mode_ != chassis_mode::balanceless)) {
+            if (status_levitate_ == true) {
+                allow_levitate_L_ = false;
+                levitate_allow_timer_L_.reload();
+            }
+            status_levitate_L_ = false;
+        }
+
+        if ((support_force_.R < force_levitate) && allow_levitate_R_
+            && (*chassis_mode_ != chassis_mode::stop)
+            && (*chassis_mode_ != chassis_mode::balanceless)) {
+            status_levitate_R_ = true;
+        } else if (
+            (support_force_.R > force_normal) && (*chassis_mode_ != chassis_mode::stop)
+            && (*chassis_mode_ != chassis_mode::balanceless)) {
+            if (status_levitate_ == true) {
+                allow_levitate_R_ = false;
+                levitate_allow_timer_R_.reload();
+            }
+            status_levitate_R_ = false;
+        }
+        watch_support=status_levitate_;
         if (status_levitate_)
             reset_persistent_data();
     }
@@ -281,5 +312,7 @@ private:
             i->reset_angle();
     }
     void reset_levitate_allowance() { allow_levitate_ = true; }
+    void reset_levitate_allowance_L() { allow_levitate_L_ = true; }
+    void reset_levitate_allowance_R() { allow_levitate_R_ = true; }
 };
 } // namespace app::observer
