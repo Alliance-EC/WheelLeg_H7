@@ -11,7 +11,6 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
-
 namespace app::controller {
 struct desire {
     Eigen::Matrix<double, 10, 1> xd = Eigen::Matrix<double, 10, 1>::Zero();

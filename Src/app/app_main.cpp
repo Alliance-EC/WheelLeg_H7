@@ -11,7 +11,6 @@
 #include "observer/observer.hpp"
 #include "system_parameters.hpp"
 #include "tool/time_counter.hpp"
-
 using namespace device;
 using namespace module;
 namespace app {
@@ -64,14 +63,14 @@ void Init() {
 
     auto M3508_config = device::DjiMotorConfig(device::DjiMotorType::M3508)
                             .enable_multi_turn_angle()
-                            .set_reduction_ratio(268.0 / 17);
+                            .set_reduction_ratio(13.0);
     M3508_instance[1]->configure(M3508_config);
     M3508_instance[0]->configure(M3508_config.reverse()); // 先正后反 顺序不要变
 
-    DM8009_instance[0]->configure(6466, true);
-    DM8009_instance[1]->configure(7954, true);
-    DM8009_instance[2]->configure(1781);
-    DM8009_instance[3]->configure(149);
+    DM8009_instance[0]->configure(5086, true);
+    DM8009_instance[1]->configure(8030, true);
+    DM8009_instance[2]->configure(2816);
+    DM8009_instance[3]->configure(5806);
 
     GM6020_yaw_instance->configure(
         device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(7817));

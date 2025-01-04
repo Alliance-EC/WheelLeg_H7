@@ -45,8 +45,8 @@ enum wheel : uint8_t {
 enum leg : uint8_t {
     leg_LF = 1 - 1,
     leg_LB = 2 - 1,
-    leg_RF = 3 - 1,
-    leg_RB = 4 - 1,
+    leg_RB = 3 - 1,
+    leg_RF = 4 - 1,
 };
 
 constexpr board this_board = board::DM_MC02;

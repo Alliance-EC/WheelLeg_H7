@@ -77,10 +77,10 @@ public:
         auto angle = DjiMotor::get_angle();
         switch (DjiMotor::get_index() + 1) {
         case 2:
-        case 4: angle -= angle_offset; break;
+        case 3: angle -= angle_offset; break;
 
         case 1:
-        case 3: angle += angle_offset + std::numbers::pi; break;
+        case 4: angle += angle_offset + std::numbers::pi; break;
         default: break;
         }
         return angle;
