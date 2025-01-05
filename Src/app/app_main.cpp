@@ -35,6 +35,7 @@ static volatile double x_states_watch[10];
 static volatile double x_desire_watch[10];
 static volatile double wheel_speed_watch[2] = {};
 static volatile double torque_watch[6] = {};
+static volatile double motor_alive_[6] = {};
 static double* torque_array[]= {
     &controller_instance->control_torque_.leg_LF,  &controller_instance->control_torque_.leg_LB,
     &controller_instance->control_torque_.leg_RB,  &controller_instance->control_torque_.leg_RF,
@@ -79,7 +80,7 @@ void Init() {
 
     GM6020_yaw_instance->configure(
         device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(7817));
-    
+
     desire_instance->Init(
         &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, DM8009_instance,
         M3508_instance, referee_instance, supercap_instance);
@@ -108,6 +109,10 @@ extern "C" void main_task_func(void* argument) {
         }
         for (uint8_t i = 0; i < 2; ++i) {
             wheel_speed_watch[i] = M3508_instance[i]->get_velocity();
+            motor_alive_[i + 4]  = M3508_instance[i]->get_online_states();
+        }
+        for (uint8_t i = 0; i < 4; ++i) {
+            motor_alive_[i] = DM8009_instance[i]->get_online_states();
         }
         for (size_t i = 0; i < sizeof(torque_array) / sizeof(torque_array[0]); ++i) {
             torque_watch[i] = *torque_array[i];
