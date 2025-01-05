@@ -34,6 +34,11 @@ static auto sender_instance     = controller::SendProcess::GetInstance();
 static volatile double x_states_watch[10];
 static volatile double x_desire_watch[10];
 static volatile double wheel_speed_watch[2] = {};
+static volatile double torque_watch[6] = {};
+static double* torque_array[]= {
+    &controller_instance->control_torque_.leg_LF,  &controller_instance->control_torque_.leg_LB,
+    &controller_instance->control_torque_.leg_RB,  &controller_instance->control_torque_.leg_RF,
+    &controller_instance->control_torque_.wheel_L, &controller_instance->control_torque_.wheel_R};
 // static volatile int dm8009_encoder_watch[4] = {};
 void Init() {
     __disable_irq();
@@ -74,7 +79,7 @@ void Init() {
 
     GM6020_yaw_instance->configure(
         device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(7817));
-
+    
     desire_instance->Init(
         &IMU_instance->output_vector, &RC_instance->data, GM6020_yaw_instance, DM8009_instance,
         M3508_instance, referee_instance, supercap_instance);
@@ -97,7 +102,6 @@ extern "C" void main_task_func(void* argument) {
             controller_instance->update();
             sender_instance->Send();
         });
-
         for (uint8_t i = 0; i < 10; ++i) {
             x_states_watch[i] = observer_instance->x_states_[i];
             x_desire_watch[i] = desire_instance->desires.xd[i];
@@ -105,10 +109,13 @@ extern "C" void main_task_func(void* argument) {
         for (uint8_t i = 0; i < 2; ++i) {
             wheel_speed_watch[i] = M3508_instance[i]->get_velocity();
         }
+        for (size_t i = 0; i < sizeof(torque_array) / sizeof(torque_array[0]); ++i) {
+            torque_watch[i] = *torque_array[i];
+        }
         // for (uint8_t i = 0; i < 4; ++i) {
         //     dm8009_encoder_watch[i] = DM8009_instance[i]->calibrate_zero_point();
         // }
-        osDelayUntil(wakeUpTime + 1);
+            osDelayUntil(wakeUpTime + 1);
     }
 }
 extern "C" void comm_task_func(void* argument) {

@@ -24,8 +24,8 @@ struct control_torque {
     double wheel_R; // velocity target when in balanceless mode
     double leg_LF;
     double leg_LB;
-    double leg_RF;
     double leg_RB;
+    double leg_RF;
 };
 class Controller {
 public:
