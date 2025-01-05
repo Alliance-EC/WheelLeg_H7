@@ -135,10 +135,10 @@ public:
             }
             SuperCap_ON_ = RC_->keyboard.shift;
 
-            // if (RC_->dial < -0.8)
-            //     status_flag.stand_jump_cmd = true;
-            // else if (RC_->dial > 0.8)
-            //     status_flag.moving_jump_cmd = true;
+            if (RC_->dial < -0.8)
+                status_flag.stand_jump_cmd = true;
+            else if (RC_->dial > 0.8)
+                status_flag.moving_jump_cmd = true;
             // if (RC_->dial < -0.8)
             //     status_flag.allow_to_climb = true;
             // else if (RC_->dial > 0.8)

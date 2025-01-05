@@ -14,12 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-double watch_data_xstates[10]={};
-double watch_data_xd[10]={};
-double watch_data_error[10]={};
 double watch_data_u[4]={};
-
-double watch_data_speed[2]={};
 bool watch_fall=false;
 
 namespace app::controller {
@@ -57,31 +52,6 @@ public:
             // wheel_model_hat();
             leg_split_corrector();
             torque_process();
-            
-            watch_data_xstates[0] = (*x_states_)(0,0);
-            watch_data_xstates[1] = (*x_states_)(1,0);
-            watch_data_xstates[2] = (*x_states_)(2,0);
-            watch_data_xstates[3] = (*x_states_)(3,0);
-            watch_data_xstates[4] = (*x_states_)(4,0);
-            watch_data_xstates[5] = (*x_states_)(5,0);
-            watch_data_xstates[6] = (*x_states_)(6,0);
-            watch_data_xstates[7] = (*x_states_)(7,0);
-            watch_data_xstates[8] = (*x_states_)(8,0);
-            watch_data_xstates[9] = (*x_states_)(9,0);
-
-            watch_data_xd[0] = (*xd_)(0,0);
-            watch_data_xd[1] = (*xd_)(1,0);
-            watch_data_xd[2] = (*xd_)(2,0);
-            watch_data_xd[3] = (*xd_)(3,0);
-            watch_data_xd[4] = (*xd_)(4,0);
-            watch_data_xd[5] = (*xd_)(5,0);
-            watch_data_xd[6] = (*xd_)(6,0);
-            watch_data_xd[7] = (*xd_)(7,0);
-            watch_data_xd[8] = (*xd_)(8,0);
-            watch_data_xd[9] = (*xd_)(9,0);
-            watch_data_speed[0]=M3508_[wheel_L]->get_velocity();
-            watch_data_speed[1]=M3508_[wheel_R]->get_velocity();
-
         } while (false);
     }
     void Init(
@@ -297,17 +267,6 @@ private:
         Eigen::Map<Eigen::Matrix<double, 4, 10, Eigen::ColMajor>> LQR_gain(lqr_k);
 
         Eigen::Matrix<double, 10, 1> e_mat = -1.0 * (*xd_ - *x_states_);
-
-            watch_data_error[0] = (e_mat)(0,0);
-            watch_data_error[1] = (e_mat)(1,0);
-            watch_data_error[2] = (e_mat)(2,0);
-            watch_data_error[3] = (e_mat)(3,0);
-            watch_data_error[4] = (e_mat)(4,0);
-            watch_data_error[5] = (e_mat)(5,0);
-            watch_data_error[6] = (e_mat)(6,0);
-            watch_data_error[7] = (e_mat)(7,0);
-            watch_data_error[8] = (e_mat)(8,0);
-            watch_data_error[9] = (e_mat)(9,0);
         if (observer_->status_levitate_) { // 腾空状态仅保持腿部竖直
             e_mat(0, 0) = 0;
             e_mat(1, 0) = 0;
