@@ -11,6 +11,7 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+double watch_v[2]={};
 namespace app::controller {
 struct desire {
     Eigen::Matrix<double, 10, 1> xd = Eigen::Matrix<double, 10, 1>::Zero();
@@ -138,10 +139,10 @@ public:
             //     status_flag.stand_jump_cmd = true;
             // else if (RC_->dial > 0.8)
             //     status_flag.moving_jump_cmd = true;
-            if (RC_->dial < -0.8)
-                status_flag.allow_to_climb = true;
-            else if (RC_->dial > 0.8)
-                status_flag.allow_to_climb = true;
+            // if (RC_->dial < -0.8)
+            //     status_flag.allow_to_climb = true;
+            // else if (RC_->dial > 0.8)
+            //     status_flag.allow_to_climb = true;
 
         } while (false);
         last_switch_right = RC_->switch_right;
@@ -196,6 +197,7 @@ private:
 
         constexpr double power_kp = 0.26;
         auto power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
+        // power_limit_velocity=100.0;
         if (!supercap_->Info.enabled_)
             x_d_ref = std::clamp(x_d_ref, -power_limit_velocity, power_limit_velocity); // 功控
         x_d_ref = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);             // 上限
@@ -211,7 +213,8 @@ private:
             status_flag.IsControlling = true;
         else
             status_flag.IsControlling = false;
-
+        watch_v[0]             = power_limit_velocity;
+        watch_v[1]             = x_velocity;
         auto gimbal_yaw_angle  = GM6020_yaw_->get_angle();
         status_flag.IsSpinning = false;
         switch (chassis_mode_) {    // yaw
