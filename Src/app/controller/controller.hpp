@@ -66,7 +66,6 @@ public:
         referee_  = referee;
         SuperCap_ = super_cap;
     }
-
     control_torque control_torque_ = {};
     Eigen::Vector<double, 4> u_mat = {};
 
@@ -202,7 +201,7 @@ private:
     //倾角过大，判定要翻倒
     void anti_fall_check() {
         about_to_fall_last_=about_to_fall_;
-        if (fabs(imu_euler->y()) > (0.05 + observer_->leg_length_avg_ * 0.5)) {
+        if (fabs(imu_euler->y()) > (0.1 + observer_->leg_length_avg_ * 0.5)) {
             about_to_fall_ = true;
             fall_resume_timer_.reload();
         }

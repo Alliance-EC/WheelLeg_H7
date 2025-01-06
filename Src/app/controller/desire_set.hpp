@@ -220,7 +220,8 @@ private:
         switch (chassis_mode_) {    // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
-            desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
+            desires.xd(2, 0) = IMU_data_->Yaw_multi_turn;//无头
+            // desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
             break;
         case chassis_mode::sideways_L:
             desires.xd(2, 0) =

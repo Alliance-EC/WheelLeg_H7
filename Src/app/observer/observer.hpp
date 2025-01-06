@@ -12,8 +12,6 @@
 #include <cmath>
 #include <limits>
 
-double watch_leglenth[2]={};
-double support[3]={};
 bool parking =false;
 bool watch_support =false;
 namespace app::observer {
@@ -190,8 +188,6 @@ private:
         last_length_Rd  = leg_length_.Rd;
 
         leg_length_avg_ = (leg_length_.L + leg_length_.R) / 2.0f;
-        watch_leglenth[0]=leg_length_.L;
-        watch_leglenth[1]=leg_length_.R;
     }
 
     void wheel_update() {
@@ -237,8 +233,6 @@ private:
         support_force_.L_last=support_force_.L;
         support_force_.L = P_l + z_wl_ddot * m_w;
         support_force_.L_d=support_force_.L-support_force_.L_last;
-
-        support[0]=support_force_.L;
         
         leg_conv_reverse(
             DM8009_[leg_RF]->get_torque(), DM8009_[leg_RB]->get_torque(),
@@ -253,14 +247,11 @@ private:
         support_force_.R_last=support_force_.R;
         support_force_.R = P_r + z_wr_ddot * m_w;
         support_force_.R_d=support_force_.R-support_force_.R_last;
-
-        support[1]=support_force_.R;
     }
     void levitate_detect() {
         constexpr double force_levitate = 20.0;
         constexpr double force_normal   = 50.0;
         auto support_force_avg          = (support_force_.L + support_force_.R) / 2.0;
-        support[2]=support_force_avg;
         if ((support_force_avg < force_levitate) && allow_levitate_
             && (*chassis_mode_ != chassis_mode::stop)
             && (*chassis_mode_ != chassis_mode::balanceless)) {
@@ -302,7 +293,6 @@ private:
             }
             status_levitate_R_ = false;
         }
-        watch_support=status_levitate_;
         if (status_levitate_)
             reset_persistent_data();
     }
