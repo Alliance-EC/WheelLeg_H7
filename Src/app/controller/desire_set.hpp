@@ -167,6 +167,7 @@ public:
 
     desire desires    = {};
     bool SuperCap_ON_ = false;
+    double power_limit_velocity;
 
 private:
     DesireSet()                                            = default; // 禁止外部构造
@@ -196,8 +197,7 @@ private:
         auto x_d_ref = x_velocity * x_velocity_scale;
 
         constexpr double power_kp = 0.26;
-        auto power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
-        // power_limit_velocity=100.0;
+        power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
         if (!supercap_->Info.enabled_)
             x_d_ref = std::clamp(x_d_ref, -power_limit_velocity, power_limit_velocity); // 功控
         x_d_ref = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);             // 上限

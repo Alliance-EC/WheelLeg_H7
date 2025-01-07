@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-double watch_data_u[4]={};
 bool watch_fall=false;
 
 namespace app::controller {
@@ -49,6 +48,7 @@ public:
             anti_fall_check();
             watch_fall = about_to_fall_;
             leg_controller();
+            wheel_speed_limit();
             // wheel_model_hat();
             leg_split_corrector();
             torque_process();
@@ -120,6 +120,7 @@ private:
     const Eigen::Matrix<double, 10, 1>* x_states_ = &observer_->x_states_;
     const observer::leg_length* leg_length_       = &observer_->leg_length_;
     double* length_desire_     = &desire_->desires.leg_length;   // will be modified by jumping_fsm
+    double*  s_d_limit=&desire_->power_limit_velocity;
     const double* roll_desire_ = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = &chassis_mode_;
@@ -373,13 +374,15 @@ private:
         leg_conv(F_r_, T_blr_, DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), leg_T);
         control_torque_.leg_RF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
-
-        watch_data_u[0] = control_torque_.wheel_L;
-        watch_data_u[1] = control_torque_.wheel_R;
-        watch_data_u[2] = T_lwl_;
-        watch_data_u[3] = T_lwr_;
     }
-
+    void wheel_speed_limit(){
+        double wheel_speed_max=*s_d_limit/Rw;
+        for (uint8_t i = 0; i < 2; ++i) {
+            if (M3508_[i]->get_velocity() > wheel_speed_max) {
+                // T_lwl_ = -wheel_L_PID_.update(wheel_speed_max, M3508_[i]->get_velocity());
+            }
+        }
+    }
     void stop_all_control() {
         control_torque_.wheel_L = nan;
         control_torque_.wheel_R = nan;
