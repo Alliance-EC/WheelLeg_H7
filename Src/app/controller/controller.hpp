@@ -15,7 +15,9 @@
 #include <cmath>
 #include <limits>
 bool watch_fall=false;
-
+double watch_wheel_speed;
+double lqr_torque;
+double limit_torque;
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -120,7 +122,9 @@ private:
     const Eigen::Matrix<double, 10, 1>* x_states_ = &observer_->x_states_;
     const observer::leg_length* leg_length_       = &observer_->leg_length_;
     double* length_desire_     = &desire_->desires.leg_length;   // will be modified by jumping_fsm
+    //
     double*  s_d_limit=&desire_->power_limit_velocity;
+
     const double* roll_desire_ = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = &chassis_mode_;
@@ -281,6 +285,8 @@ private:
         T_lwr_ = u_mat(1, 0);
         T_bll_ = u_mat(2, 0);
         T_blr_ = u_mat(3, 0);
+
+        lqr_torque = T_lwl_;
     }
 
     void leg_controller() {
@@ -320,21 +326,21 @@ private:
         last_mode = *mode_;
     }
     void wheel_model_hat() {
-        constexpr double predict_dt = 0.001; // 预测之后多少时间的值
-        speed_hat(
-            T_bll_, T_blr_, T_lwl_, T_lwr_, predict_dt, leg_length_->L, leg_length_->R,
-            (*x_states_)(3, 0), (*x_states_)(1, 0), (*x_states_)(4, 0), (*x_states_)(6, 0),
-            wheel_speed_hat_);
+        // constexpr double predict_dt = 0.001; // 预测之后多少时间的值
+        // speed_hat(
+        //     T_bll_, T_blr_, T_lwl_, T_lwr_, predict_dt, leg_length_->L, leg_length_->R,
+        //     (*x_states_)(3, 0), (*x_states_)(1, 0), (*x_states_)(4, 0), (*x_states_)(6, 0),
+        //     wheel_speed_hat_);
 
-        constexpr double slip_start = 2;
-        if (std::abs(wheel_speed_hat_[0] - M3508_[wheel_L]->get_velocity()) > slip_start) {
-            T_lwl_compensate_ =
-                wheel_compensate_kp_ * (wheel_speed_hat_[0] - M3508_[wheel_L]->get_velocity());
-        }
-        if (std::abs(wheel_speed_hat_[1] - M3508_[wheel_R]->get_velocity()) > slip_start) {
-            T_lwr_compensate_ =
-                wheel_compensate_kp_ * (wheel_speed_hat_[1] - M3508_[wheel_R]->get_velocity());
-        }
+        // constexpr double slip_start = 2;
+        // if (std::abs(wheel_speed_hat_[0] - M3508_[wheel_L]->get_velocity()) > slip_start) {
+        //     T_lwl_compensate_ =
+        //         wheel_compensate_kp_ * (wheel_speed_hat_[0] - M3508_[wheel_L]->get_velocity());
+        // }
+        // if (std::abs(wheel_speed_hat_[1] - M3508_[wheel_R]->get_velocity()) > slip_start) {
+        //     T_lwr_compensate_ =
+        //         wheel_compensate_kp_ * (wheel_speed_hat_[1] - M3508_[wheel_R]->get_velocity());
+        // }
     }
     void leg_split_corrector() {
         auto leg_split_correct_torque = leg_split_corrector_PID_.update(
@@ -346,12 +352,7 @@ private:
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
 
-        T_lwl_ += T_lwl_compensate_;
-        T_lwr_ += T_lwr_compensate_;
-        T_bll_ += T_bll_compensate_;
-        T_blr_ += T_blr_compensate_;
-
-        if (observer_->status_levitate_ || (status_flag.allow_to_climb&&about_to_fall_)) {
+        if (observer_->status_levitate_) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }
@@ -376,11 +377,21 @@ private:
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
     }
     void wheel_speed_limit(){
-        double wheel_speed_max=*s_d_limit/Rw;
-        for (uint8_t i = 0; i < 2; ++i) {
-            if (M3508_[i]->get_velocity() > wheel_speed_max) {
-                // T_lwl_ = -wheel_L_PID_.update(wheel_speed_max, M3508_[i]->get_velocity());
-            }
+        double wheel_speed_max = *s_d_limit / Rw;
+        const double kp =0.8;
+        watch_wheel_speed=wheel_speed_max;
+        if (M3508_[0]->get_velocity() > wheel_speed_max+2) {
+            T_lwl_ -= kp * (M3508_[0]->get_velocity() - wheel_speed_max);
+        } else if (M3508_[0]->get_velocity() < -wheel_speed_max - 2){
+            T_lwl_ -= kp * (M3508_[0]->get_velocity() + wheel_speed_max);
+        }
+        
+        if (M3508_[1]->get_velocity() > wheel_speed_max + 2) {
+            T_lwr_ += kp * (M3508_[1]->get_velocity() - wheel_speed_max);
+        } else if (M3508_[1]->get_velocity() < -wheel_speed_max - 2) {
+            T_lwr_ += kp * (M3508_[1]->get_velocity() + wheel_speed_max);
+        } else {
+            limit_torque = 0;
         }
     }
     void stop_all_control() {

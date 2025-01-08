@@ -4,7 +4,7 @@
 #include <cstdint>
 
 namespace app {
-constexpr double m_b     = 15.82;  // 身体质量
+constexpr double m_b     = 10.61;  // 身体质量
 constexpr double eta_l   = 0.2945; // 质心位置系数
 constexpr double m_l     = 1.289;
 constexpr double m_w     = 0.402;

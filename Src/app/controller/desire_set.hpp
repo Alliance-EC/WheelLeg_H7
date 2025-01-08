@@ -11,7 +11,6 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
-double watch_v[2]={};
 namespace app::controller {
 struct desire {
     Eigen::Matrix<double, 10, 1> xd = Eigen::Matrix<double, 10, 1>::Zero();
@@ -193,6 +192,7 @@ private:
     bool balanceless_mode_              = false;
     bool motor_alive_                   = false;
 
+    double yaw_set=0.0;
     void set_states_desire(double x_velocity, double rotation_velocity = 0.0) {
         auto x_d_ref = x_velocity * x_velocity_scale;
 
@@ -213,23 +213,15 @@ private:
             status_flag.IsControlling = true;
         else
             status_flag.IsControlling = false;
-        watch_v[0]             = power_limit_velocity;
-        watch_v[1]             = x_velocity;
         auto gimbal_yaw_angle  = GM6020_yaw_->get_angle();
         status_flag.IsSpinning = false;
         switch (chassis_mode_) {    // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
-            desires.xd(2, 0) = IMU_data_->Yaw_multi_turn;//无头
+            // 无头
+            yaw_set += RC_->joystick_left.y() * 0.004;
+            desires.xd(2, 0) = yaw_set;
             // desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
-            break;
-        case chassis_mode::sideways_L:
-            desires.xd(2, 0) =
-                IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi * 0.5);
-            break;
-        case chassis_mode::sideways_R:
-            desires.xd(2, 0) =
-                IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi * 1.5);
             break;
         case chassis_mode::spin:
         case chassis_mode::spin_control: {
@@ -265,19 +257,20 @@ private:
     }
     void motor_alive_detect() {
         motor_alive_ = false;
-        for (auto motor : M3508_) {
-            if (!motor->get_online_states()) {
-                return;
-            }
-        }
+        // for (auto motor : M3508_) {
+        //     if (!motor->get_online_states()) {
+        //         return;
+        //     }
+        // }
         for (auto motor : DM8009_) {
             if (!motor->get_online_states()) {
                 return;
             }
         }
-        if (!GM6020_yaw_->get_online_states()) {
-            return;
-        }
+        //无头模式，整车时记得改回！
+        // if (!GM6020_yaw_->get_online_states()) {
+        //     return;
+        // }
         motor_alive_ = true;
     }
 };

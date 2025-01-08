@@ -249,8 +249,11 @@ private:
         support_force_.R_d=support_force_.R-support_force_.R_last;
     }
     void levitate_detect() {
-        constexpr double force_levitate = 20.0;
-        constexpr double force_normal   = 50.0;
+        //无头参数，记得改回
+        constexpr double force_levitate = 15.0;
+        constexpr double force_normal   = 40.0;
+        // constexpr double force_levitate = 20.0;
+        // constexpr double force_normal   = 50.0;
         auto support_force_avg          = (support_force_.L + support_force_.R) / 2.0;
         if ((support_force_avg < force_levitate) && allow_levitate_
             && (*chassis_mode_ != chassis_mode::stop)

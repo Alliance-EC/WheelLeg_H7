@@ -93,10 +93,10 @@ void Init() {
     M3508_instance[1]->configure(M3508_config);
     M3508_instance[0]->configure(M3508_config.reverse()); // 先正后反 顺序不要变
 
-    DM8009_instance[0]->configure(5086, true);
-    DM8009_instance[1]->configure(8030, true);
-    DM8009_instance[2]->configure(2816);
-    DM8009_instance[3]->configure(5806);
+    DM8009_instance[0]->configure(5079, true);
+    DM8009_instance[1]->configure(7957, true);
+    DM8009_instance[2]->configure(2892);
+    DM8009_instance[3]->configure(5863);
 
     GM6020_yaw_instance->configure(
         device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(7817));
