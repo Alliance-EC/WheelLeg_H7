@@ -134,14 +134,14 @@ public:
             }
             SuperCap_ON_ = RC_->keyboard.shift;
 
-            if (RC_->dial < -0.8)
-                status_flag.stand_jump_cmd = true;
-            else if (RC_->dial > 0.8)
-                status_flag.moving_jump_cmd = true;
             // if (RC_->dial < -0.8)
-            //     status_flag.allow_to_climb = true;
+            //     status_flag.stand_jump_cmd = true;
             // else if (RC_->dial > 0.8)
-            //     status_flag.allow_to_climb = true;
+            //     status_flag.moving_jump_cmd = true;
+            if (RC_->dial < -0.8)
+                status_flag.set_to_climb = true;
+            else if (RC_->dial > 0.8)
+                status_flag.set_to_climb = true;
 
         } while (false);
         last_switch_right = RC_->switch_right;
@@ -257,17 +257,17 @@ private:
     }
     void motor_alive_detect() {
         motor_alive_ = false;
-        // for (auto motor : M3508_) {
-        //     if (!motor->get_online_states()) {
-        //         return;
-        //     }
-        // }
+        for (auto motor : M3508_) {
+            if (!motor->get_online_states()) {
+                return;
+            }
+        }
         for (auto motor : DM8009_) {
             if (!motor->get_online_states()) {
                 return;
             }
         }
-        //无头模式，整车时记得改回！
+        //无头模式，待改回
         // if (!GM6020_yaw_->get_online_states()) {
         //     return;
         // }

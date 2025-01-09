@@ -18,6 +18,7 @@ bool watch_fall=false;
 double watch_wheel_speed;
 double lqr_torque;
 double limit_torque;
+double debug;
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -89,6 +90,13 @@ private:
         prepare_landing,
         finish
     };
+    enum class climb_stage : uint8_t {
+        ready_to_climb = 0,
+        detect_step,
+        backward_legs,
+        extend_legs,
+        restand
+    };
     double F_l_ = 0, F_r_ = 0;
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
     double T_lwl_compensate_ = 0, T_lwr_compensate_ = 0;
@@ -98,7 +106,6 @@ private:
     bool about_to_fall_last_             = false;
     bool allow_re_stand             = false;
     tool::daemon fall_resume_timer_ = tool::daemon(0.5, std::bind(&Controller::fall_resume, this));
-
     double wheel_compensate_kp_ = 0.25;
     PID pid_roll_               = PID({300, 0, 0, 500, 0.0, 0.0, dt});
     PID pid_roll_d_             = PID({30, 0, 0, 500, 0.0, 0.0, dt});
@@ -130,6 +137,7 @@ private:
     const chassis_mode* mode_ = &chassis_mode_;
 
     jump_stage jump_stage_ = jump_stage::ready_to_jump;
+    climb_stage climb_stage_ = climb_stage::ready_to_climb;
 
     tool::filter::BandStopFilter T_l_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
     tool::filter::BandStopFilter T_r_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
@@ -215,14 +223,63 @@ private:
     }
     void fall_resume() { 
         about_to_fall_ = false;
-        if (about_to_fall_last_&&about_to_fall_==false){
-            status_flag.allow_to_climb=false;
         }
+    void climb_fsm(){
+        const double F_x_max=30.0;//摆角受力 30N 认为堵转
+        const double theta_b_normal=0.08;
+        auto leg_length     = (leg_length_->L + leg_length_->R) / 2.0;
+        Eigen::Vector<double, 3> x_error;
+        uint8_t direction = 1;
+        x_error(0) = std::abs((*xd_)(4, 0) - (*x_states_)(4, 0));
+        x_error(1) = std::abs((*xd_)(6, 0) - (*x_states_)(6, 0));
+        x_error(2) = std::abs((*xd_)(8, 0) - (*x_states_)(8, 0));
+        
+        switch (climb_stage_) {
+        case climb_stage::ready_to_climb:{
+            if (status_flag.set_to_climb==true){
+                climb_stage_=climb_stage::detect_step;
+            }
+            break;
         }
-
+        case climb_stage::detect_step:{
+            if (observer_->F_x_.L > F_x_max && observer_->F_x_.R >F_x_max){
+                climb_stage_ = climb_stage::backward_legs;
+                direction=1;
+            }
+            else if (observer_->F_x_.L < -F_x_max && observer_->F_x_.R <-F_x_max){
+                climb_stage_ = climb_stage::backward_legs;
+                direction=-1;
+            }
+            break;
+        }
+        case climb_stage::backward_legs:{
+            // constexpr double target_leg_angle = 0.5;
+            // (*xd_)(4, 0) = (*xd_)(6, 0) = target_leg_angle*direction;
+            if (x_error (0)< 0.1 && x_error (1)< 0.1) {
+                climb_stage_ = climb_stage::extend_legs;
+            }
+            break;
+        }
+        case climb_stage::extend_legs: {
+            *length_desire_ = 0.12;
+            if (leg_length < 0.13) {
+                climb_stage_ = climb_stage::restand;
+            }
+            break;
+        }
+        case climb_stage::restand: {
+            if (x_error(2) < theta_b_normal) {
+                climb_stage_=climb_stage::ready_to_climb;
+            }
+            break;
+        }
+    }
+    }
     void super_cap_controller() {
-        // Maximum excess power when buffer energy is sufficient.
+        // Maximum excess  when buffer energy is sufficient.
         constexpr double excess_power_limit = 35;
+        //电管可通过的最大功率
+        constexpr double refree_power_max = 200.0;
         //               power_limit_after_buffer_energy_closed_loop =
         constexpr double buffer_energy_control_line = 120; // = referee + excess
         constexpr double buffer_energy_base_line    = 50;  // = referee
@@ -234,25 +291,21 @@ private:
         const auto power_buffer               = referee_->buffer_energy_;
 
         double power_limit_after_buffer_energy_closed_loop =
-            power_limit
-                * std::clamp(
-                    (power_buffer - buffer_energy_dead_line)
-                        / (buffer_energy_base_line - buffer_energy_dead_line),
-                    0.0, 1.0)
+            power_limit* std::clamp((power_buffer - buffer_energy_dead_line)
+                        / (buffer_energy_base_line - buffer_energy_dead_line),0.0, 1.0)
             + excess_power_limit
-                  * std::clamp(
-                      (power_buffer - buffer_energy_base_line)
-                          / (buffer_energy_control_line - buffer_energy_base_line),
-                      0.0, 1.0);
-        SuperCap_set_.power_limit =
-            static_cast<uint8_t>(power_limit_after_buffer_energy_closed_loop);
+                  * std::clamp((power_buffer - buffer_energy_base_line)
+                        / (buffer_energy_control_line - buffer_energy_base_line),0.0, 1.0);
+        SuperCap_set_.power_limit =static_cast<uint8_t>(power_limit_after_buffer_energy_closed_loop);
         /*超电自动开启后在缓冲能量充满时关闭，操作手按键开启的则不会自动关闭*/
         if ((power > power_limit) && (power_buffer / (power - power_limit) < 0.3)) {
+            SuperCap_set_.enable = true;
+        } else if (SuperCap_->Info.chassis_power_ > refree_power_max) {
             SuperCap_set_.enable = true;
         } else if (power_buffer >= 60.0) {
             SuperCap_set_.enable = false;
         }
-
+        debug=SuperCap_->Info.chassis_power_;
         if (desire_->SuperCap_ON_) {
             SuperCap_set_.enable = true;
         }
@@ -352,7 +405,7 @@ private:
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
 
-        if (observer_->status_levitate_) {
+        if (observer_->status_levitate_ || (climb_stage_ != climb_stage::restand && climb_stage_ != climb_stage::ready_to_climb)) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }
@@ -378,7 +431,7 @@ private:
     }
     void wheel_speed_limit(){
         double wheel_speed_max = *s_d_limit / Rw;
-        const double kp =0.8;
+        const double kp =2;
         watch_wheel_speed=wheel_speed_max;
         if (M3508_[0]->get_velocity() > wheel_speed_max+2) {
             T_lwl_ -= kp * (M3508_[0]->get_velocity() - wheel_speed_max);
@@ -388,8 +441,10 @@ private:
         
         if (M3508_[1]->get_velocity() > wheel_speed_max + 2) {
             T_lwr_ += kp * (M3508_[1]->get_velocity() - wheel_speed_max);
+            limit_torque =kp * (M3508_[1]->get_velocity() - wheel_speed_max);
         } else if (M3508_[1]->get_velocity() < -wheel_speed_max - 2) {
             T_lwr_ += kp * (M3508_[1]->get_velocity() + wheel_speed_max);
+            limit_torque = kp * (M3508_[1]->get_velocity() + wheel_speed_max);
         } else {
             limit_torque = 0;
         }

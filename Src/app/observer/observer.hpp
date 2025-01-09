@@ -12,8 +12,8 @@
 #include <cmath>
 #include <limits>
 
+double watch_support[2]={};
 bool parking =false;
-bool watch_support =false;
 namespace app::observer {
 struct leg_length {
     double L;
@@ -24,6 +24,14 @@ struct leg_length {
     double Rdd;
 };
 struct support_force {
+    double L;
+    double R;
+    double L_d;
+    double R_d;
+    double L_last;
+    double R_last;
+};
+struct F_x {
     double L;
     double R;
     double L_d;
@@ -77,6 +85,9 @@ public:
     Eigen::Matrix<double, 10, 1> x_states_;
     leg_length leg_length_;
     support_force support_force_;
+
+    F_x F_x_;
+    
     bool status_levitate_;
     bool status_levitate_L_;
     bool status_levitate_R_;
@@ -118,10 +129,6 @@ private:
     Eigen::Vector<double, 4>* u_mat_ = nullptr;
     // kalman_observer kalman_observer_ = {};
 
-    //带阻滤波器，试了没用
-    // tool::filter::BandStopFilter angle_Ld_BSF_ = tool::filter::BandStopFilter(25, 32, 1000, 3);
-    // tool::filter::BandStopFilter angle_Rd_BSF_ = tool::filter::BandStopFilter(25, 32, 1000, 3);
-    
     tool::filter::LowPassFilter angle_Ld_LPF_ = tool::filter::LowPassFilter(100);
     tool::filter::LowPassFilter angle_Rd_LPF_ = tool::filter::LowPassFilter(100);
     tool::filter::LowPassFilter length_L_LPF_ = tool::filter::LowPassFilter(100);
@@ -164,7 +171,6 @@ private:
 
         leg_length_.Ldd = (leg_length_.Ld - last_length_Ld) / dt_;
         last_length_Ld  = leg_length_.Ld;
-
         // right
         leg_pos(DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), data);
 
@@ -233,7 +239,8 @@ private:
         support_force_.L_last=support_force_.L;
         support_force_.L = P_l + z_wl_ddot * m_w;
         support_force_.L_d=support_force_.L-support_force_.L_last;
-        
+        F_x_.L=T_l;
+
         leg_conv_reverse(
             DM8009_[leg_RF]->get_torque(), DM8009_[leg_RB]->get_torque(),
             DM8009_[leg_RF]->get_angle(), DM8009_[leg_RB]->get_angle(), data);
@@ -247,6 +254,9 @@ private:
         support_force_.R_last=support_force_.R;
         support_force_.R = P_r + z_wr_ddot * m_w;
         support_force_.R_d=support_force_.R-support_force_.R_last;
+        F_x_.R               = T_r;
+        watch_support[0]     = P_l;
+        watch_support[1]     = P_r;
     }
     void levitate_detect() {
         //无头参数，记得改回
