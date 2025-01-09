@@ -225,7 +225,7 @@ private:
         about_to_fall_ = false;
         }
     void climb_fsm(){
-        const double F_x_max=10.0;//摆角受力 30N 认为堵转
+        const double F_x_max=15.0;//摆角受力 30N 认为堵转
         const double theta_b_normal=0.08;
         auto leg_length     = (leg_length_->L + leg_length_->R) / 2.0;
         Eigen::Vector<double, 3> x_error;
@@ -253,9 +253,9 @@ private:
             break;
         }
         case climb_stage::backward_legs:{
-            constexpr double target_leg_angle = 0.5;
-            // (*xd_)(4, 0) = (*xd_)(6, 0) = target_leg_angle*direction;
-            if (x_error (0)< 0.1 && x_error (1)< 0.1) {
+            constexpr double target_leg_angle = 0.2;
+            (*xd_)(4, 0) = (*xd_)(6, 0) = target_leg_angle*direction;
+            if (x_error (0)< 0.05 && x_error (1)< 0.05) {
                 climb_stage_ = climb_stage::extend_legs;
             }
             break;
