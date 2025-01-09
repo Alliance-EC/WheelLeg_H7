@@ -52,7 +52,7 @@ enum leg : uint8_t {
 constexpr board this_board = board::DM_MC02;
 
 // public variables
-static struct status_flags {
+static struct s {
     bool IsControlling : 1 = false;
     bool IsSpinning    : 1 = false;
 // static bool IsControlling = false;

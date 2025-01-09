@@ -225,7 +225,7 @@ private:
         about_to_fall_ = false;
         }
     void climb_fsm(){
-        const double F_x_max=30.0;//摆角受力 30N 认为堵转
+        const double F_x_max=10.0;//摆角受力 30N 认为堵转
         const double theta_b_normal=0.08;
         auto leg_length     = (leg_length_->L + leg_length_->R) / 2.0;
         Eigen::Vector<double, 3> x_error;
@@ -253,7 +253,7 @@ private:
             break;
         }
         case climb_stage::backward_legs:{
-            // constexpr double target_leg_angle = 0.5;
+            constexpr double target_leg_angle = 0.5;
             // (*xd_)(4, 0) = (*xd_)(6, 0) = target_leg_angle*direction;
             if (x_error (0)< 0.1 && x_error (1)< 0.1) {
                 climb_stage_ = climb_stage::extend_legs;
@@ -270,6 +270,7 @@ private:
         case climb_stage::restand: {
             if (x_error(2) < theta_b_normal) {
                 climb_stage_=climb_stage::ready_to_climb;
+                status_flag.set_to_climb=false;
             }
             break;
         }
@@ -316,8 +317,10 @@ private:
     }
     void kinematic_controller() {
         double lqr_k[40];
-        if (status_flag.IsSpinning)
+        if (status_flag.IsSpinning && status_flag.set_to_climb == false)
             LQR_k_spin(leg_length_->L, leg_length_->R, lqr_k);
+        else if (status_flag.set_to_climb && status_flag.IsSpinning==false)
+            LQR_k_climb(leg_length_->L, leg_length_->R, lqr_k);
         else
             LQR_k(leg_length_->L, leg_length_->R, lqr_k);
 
@@ -405,7 +408,7 @@ private:
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
 
-        if (observer_->status_levitate_ || (climb_stage_ != climb_stage::restand && climb_stage_ != climb_stage::ready_to_climb)) {
+        if (observer_->status_levitate_ || climb_stage_ == climb_stage::backward_legs ||climb_stage_ == climb_stage::extend_legs) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }
@@ -434,9 +437,9 @@ private:
         const double kp =2;
         watch_wheel_speed=wheel_speed_max;
         if (M3508_[0]->get_velocity() > wheel_speed_max+2) {
-            T_lwl_ -= kp * (M3508_[0]->get_velocity() - wheel_speed_max);
+            T_lwl_ += kp * (M3508_[0]->get_velocity() - wheel_speed_max);
         } else if (M3508_[0]->get_velocity() < -wheel_speed_max - 2){
-            T_lwl_ -= kp * (M3508_[0]->get_velocity() + wheel_speed_max);
+            T_lwl_ += kp * (M3508_[0]->get_velocity() + wheel_speed_max);
         }
         
         if (M3508_[1]->get_velocity() > wheel_speed_max + 2) {
