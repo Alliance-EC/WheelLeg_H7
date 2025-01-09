@@ -2,7 +2,7 @@
 
 #include "bsp/can/can.hpp"
 #include <cstdint>
-
+                                                                                                                                                        
 namespace device {
 struct __attribute__((packed)) SuperCapFeedback {
     uint16_t chassis_power;
