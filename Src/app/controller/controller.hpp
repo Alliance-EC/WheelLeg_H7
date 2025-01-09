@@ -46,6 +46,7 @@ public:
                 stop_all_control();
                 break;
             }
+            climb_fsm();
             jumping_fsm();
             kinematic_controller();
             anti_fall_check();
@@ -226,13 +227,13 @@ private:
         }
     void climb_fsm(){
         const double F_x_max=15.0;//摆角受力 30N 认为堵转
-        const double theta_b_normal=0.08;
+        const double speed_b_normal=0.2;
         auto leg_length     = (leg_length_->L + leg_length_->R) / 2.0;
         Eigen::Vector<double, 3> x_error;
         uint8_t direction = 1;
         x_error(0) = std::abs((*xd_)(4, 0) - (*x_states_)(4, 0));
         x_error(1) = std::abs((*xd_)(6, 0) - (*x_states_)(6, 0));
-        x_error(2) = std::abs((*xd_)(8, 0) - (*x_states_)(8, 0));
+        x_error(2) = std::abs((*x_states_)(0, 0));
         
         switch (climb_stage_) {
         case climb_stage::ready_to_climb:{
@@ -244,20 +245,14 @@ private:
         case climb_stage::detect_step:{
             if (observer_->F_x_.L > F_x_max && observer_->F_x_.R >F_x_max){
                 climb_stage_ = climb_stage::backward_legs;
-                direction=1;
             }
             else if (observer_->F_x_.L < -F_x_max && observer_->F_x_.R <-F_x_max){
                 climb_stage_ = climb_stage::backward_legs;
-                direction=-1;
             }
             break;
         }
         case climb_stage::backward_legs:{
-            constexpr double target_leg_angle = 0.2;
-            (*xd_)(4, 0) = (*xd_)(6, 0) = target_leg_angle*direction;
-            if (x_error (0)< 0.05 && x_error (1)< 0.05) {
-                climb_stage_ = climb_stage::extend_legs;
-            }
+            climb_stage_ = climb_stage::extend_legs;
             break;
         }
         case climb_stage::extend_legs: {
@@ -268,7 +263,7 @@ private:
             break;
         }
         case climb_stage::restand: {
-            if (x_error(2) < theta_b_normal) {
+            if (x_error(2) < speed_b_normal) {
                 climb_stage_=climb_stage::ready_to_climb;
                 status_flag.set_to_climb=false;
             }
@@ -408,7 +403,7 @@ private:
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
 
-        if (observer_->status_levitate_ || climb_stage_ == climb_stage::backward_legs ||climb_stage_ == climb_stage::extend_legs) {
+        if (observer_->status_levitate_ || climb_stage_ == climb_stage::backward_legs ||climb_stage_ == climb_stage::extend_legs||climb_stage_ == climb_stage::restand) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }
