@@ -137,7 +137,8 @@ private:
     const double* roll_desire_ = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = &chassis_mode_;
-    double wheel_speed_hat[2]={};
+    double wheel_speed_hat_last[2]={0.0,0.0};
+    double wheel_speed_hat[2]={0.0,0.0};
     jump_stage jump_stage_ = jump_stage::ready_to_jump;
     climb_stage climb_stage_ = climb_stage::ready_to_climb;
 
@@ -353,8 +354,13 @@ void jumping_fsm() {
             (*x_states_)(7, 0), x_hat);
         lqr_torque = T_lwl_;
 
-        watch_speed[0]=wheel_speed_hat[0]=(x_hat[1]-x_hat[3]*R_l)/Rw;
-        watch_speed[1]=wheel_speed_hat[1]=(x_hat[1]+x_hat[3]*R_l)/Rw;
+        watch_speed[0]=wheel_speed_hat[0];
+        wheel_speed_hat_last[0] = wheel_speed_hat[0];
+        wheel_speed_hat[0]=(x_hat[1]-x_hat[3]*R_l)/Rw;
+
+        watch_speed[1]=wheel_speed_hat[1];
+        wheel_speed_hat_last[1] = wheel_speed_hat[1];
+        wheel_speed_hat[1]=(x_hat[1]+x_hat[3]*R_l)/Rw;
     }
 
     void leg_controller() {
@@ -449,22 +455,22 @@ void jumping_fsm() {
         double torque_for_limit[2]={};
         double dead_line =6.0;
         const double kp =0.006;
-        if (M3508_[0]->get_velocity() > wheel_speed_hat[0]) {
+        if (M3508_[0]->get_velocity() > wheel_speed_hat_last[0]) {
             torque_for_limit[0] =
-                kp * pow((M3508_[0]->get_velocity() - wheel_speed_hat[0]) / dead_line, 3);
-        } else if (M3508_[0]->get_velocity() < -wheel_speed_hat[0]){
+                kp * pow((M3508_[0]->get_velocity() - wheel_speed_hat_last[0]) / dead_line, 3);
+        } else if (M3508_[0]->get_velocity() < -wheel_speed_hat_last[0]) {
             torque_for_limit[0] =
-                kp * pow((M3508_[0]->get_velocity() + wheel_speed_hat[0]) / dead_line, 3);
+                kp * pow((M3508_[0]->get_velocity() + wheel_speed_hat_last[0]) / dead_line, 3);
         }
         torque_for_limit[0] = std::clamp(torque_for_limit[0], -10.0, 10.0);
         T_lwl_ += torque_for_limit[0];
 
-        if (M3508_[1]->get_velocity() > wheel_speed_hat[1]) {
+        if (M3508_[1]->get_velocity() > wheel_speed_hat_last[1]) {
             torque_for_limit[1] =
-                kp * pow((M3508_[1]->get_velocity() - wheel_speed_hat[1]) / dead_line, 3);
-        } else if (M3508_[1]->get_velocity() < -wheel_speed_hat[1]) {
+                kp * pow((M3508_[1]->get_velocity() - wheel_speed_hat_last[1]) / dead_line, 3);
+        } else if (M3508_[1]->get_velocity() < -wheel_speed_hat_last[1]) {
             torque_for_limit[1] =
-                kp * pow((M3508_[1]->get_velocity() + wheel_speed_hat[1]) / dead_line, 3);
+                kp * pow((M3508_[1]->get_velocity() + wheel_speed_hat_last[1]) / dead_line, 3);
         }
         torque_for_limit[1] = std::clamp(torque_for_limit[1], -10.0, 10.0);
         T_lwr_ += torque_for_limit[1]; 
