@@ -446,22 +446,28 @@ void jumping_fsm() {
     }
     void wheel_speed_limit(){
         double wheel_speed_max = *s_d_limit / Rw;
-        const double kp =0.35;
-        if (M3508_[0]->get_velocity() > wheel_speed_hat[0]+10) {
-            T_lwl_ += kp * (M3508_[0]->get_velocity() - wheel_speed_hat[0]);
-        } else if (M3508_[0]->get_velocity() < -wheel_speed_hat[0] - 10){
-            T_lwl_ += kp * (M3508_[0]->get_velocity() + wheel_speed_hat[0]);
+        double torque_for_limit[2]={};
+        double dead_line =6.0;
+        const double kp =0.006;
+        if (M3508_[0]->get_velocity() > wheel_speed_hat[0]) {
+            torque_for_limit[0] =
+                kp * pow((M3508_[0]->get_velocity() - wheel_speed_hat[0]) / dead_line, 3);
+        } else if (M3508_[0]->get_velocity() < -wheel_speed_hat[0]){
+            torque_for_limit[0] =
+                kp * pow((M3508_[0]->get_velocity() + wheel_speed_hat[0]) / dead_line, 3);
         }
-        
-        if (M3508_[1]->get_velocity() > wheel_speed_hat[1] + 10) {
-            T_lwr_ += kp * (M3508_[1]->get_velocity() - wheel_speed_hat[1]);
-            limit_torque =kp * (M3508_[1]->get_velocity() - wheel_speed_hat[1]);
-        } else if (M3508_[1]->get_velocity() < -wheel_speed_hat[1] - 10) {
-            T_lwr_ += kp * (M3508_[1]->get_velocity() + wheel_speed_hat[1]);
-            limit_torque = kp * (M3508_[1]->get_velocity() + wheel_speed_hat[1]);
-        } else {
-            limit_torque = 0;
+        torque_for_limit[0] = std::clamp(torque_for_limit[0], -10.0, 10.0);
+        T_lwl_ += torque_for_limit[0];
+
+        if (M3508_[1]->get_velocity() > wheel_speed_hat[1]) {
+            torque_for_limit[1] =
+                kp * pow((M3508_[1]->get_velocity() - wheel_speed_hat[1]) / dead_line, 3);
+        } else if (M3508_[1]->get_velocity() < -wheel_speed_hat[1]) {
+            torque_for_limit[1] =
+                kp * pow((M3508_[1]->get_velocity() + wheel_speed_hat[1]) / dead_line, 3);
         }
+        torque_for_limit[1] = std::clamp(torque_for_limit[1], -10.0, 10.0);
+        T_lwr_ += torque_for_limit[1]; 
     }
     void stop_all_control() {
         control_torque_.wheel_L = nan;
