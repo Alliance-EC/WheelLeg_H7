@@ -16,7 +16,7 @@
 #include <cmath>
 #include <limits>
 bool watch_fall=false;
-double watch_wheel_speed;
+double watch_speed[2];
 double lqr_torque;
 double limit_torque;
 double debug;
@@ -137,7 +137,7 @@ private:
     const double* roll_desire_ = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = &chassis_mode_;
-
+    double wheel_speed_hat[2]={};
     jump_stage jump_stage_ = jump_stage::ready_to_jump;
     climb_stage climb_stage_ = climb_stage::ready_to_climb;
 
@@ -352,6 +352,9 @@ void jumping_fsm() {
             (*x_states_)(9, 0), (*x_states_)(4, 0), (*x_states_)(6, 0), (*x_states_)(5, 0),
             (*x_states_)(7, 0), x_hat);
         lqr_torque = T_lwl_;
+
+        watch_speed[0]=wheel_speed_hat[0]=(x_hat[1]-x_hat[3]*R_l)/Rw;
+        watch_speed[1]=wheel_speed_hat[1]=(x_hat[1]+x_hat[3]*R_l)/Rw;
     }
 
     void leg_controller() {
@@ -443,20 +446,19 @@ void jumping_fsm() {
     }
     void wheel_speed_limit(){
         double wheel_speed_max = *s_d_limit / Rw;
-        const double kp =2;
-        watch_wheel_speed=wheel_speed_max;
-        if (M3508_[0]->get_velocity() > wheel_speed_max+2) {
-            T_lwl_ += kp * (M3508_[0]->get_velocity() - wheel_speed_max);
-        } else if (M3508_[0]->get_velocity() < -wheel_speed_max - 2){
-            T_lwl_ += kp * (M3508_[0]->get_velocity() + wheel_speed_max);
+        const double kp =0.35;
+        if (M3508_[0]->get_velocity() > wheel_speed_hat[0]+10) {
+            T_lwl_ += kp * (M3508_[0]->get_velocity() - wheel_speed_hat[0]);
+        } else if (M3508_[0]->get_velocity() < -wheel_speed_hat[0] - 10){
+            T_lwl_ += kp * (M3508_[0]->get_velocity() + wheel_speed_hat[0]);
         }
         
-        if (M3508_[1]->get_velocity() > wheel_speed_max + 2) {
-            T_lwr_ += kp * (M3508_[1]->get_velocity() - wheel_speed_max);
-            limit_torque =kp * (M3508_[1]->get_velocity() - wheel_speed_max);
-        } else if (M3508_[1]->get_velocity() < -wheel_speed_max - 2) {
-            T_lwr_ += kp * (M3508_[1]->get_velocity() + wheel_speed_max);
-            limit_torque = kp * (M3508_[1]->get_velocity() + wheel_speed_max);
+        if (M3508_[1]->get_velocity() > wheel_speed_hat[1] + 10) {
+            T_lwr_ += kp * (M3508_[1]->get_velocity() - wheel_speed_hat[1]);
+            limit_torque =kp * (M3508_[1]->get_velocity() - wheel_speed_hat[1]);
+        } else if (M3508_[1]->get_velocity() < -wheel_speed_hat[1] - 10) {
+            T_lwr_ += kp * (M3508_[1]->get_velocity() + wheel_speed_hat[1]);
+            limit_torque = kp * (M3508_[1]->get_velocity() + wheel_speed_hat[1]);
         } else {
             limit_torque = 0;
         }
