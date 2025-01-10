@@ -1,5 +1,6 @@
 #pragma once
 #include "LQR_k.hpp"
+#include "x_states_hat.hpp"
 #include "LegConv.hpp"
 #include "app/observer/observer.hpp"
 #include "app/system_parameters.hpp"
@@ -244,8 +245,8 @@ void jumping_fsm() {
             break;
         }
         case climb_stage::detect_step:{
-            if ((observer_->F_x_.L > F_x_max && observer_->F_x_.R > F_x_max)
-                || (observer_->F_x_.L < -F_x_max && observer_->F_x_.R < -F_x_max)) {
+            if ((observer_->F_x_.L_horiozontal > F_x_max && observer_->F_x_.R_horiozontal > F_x_max)
+                || (observer_->F_x_.L_horiozontal < -F_x_max && observer_->F_x_.R_horiozontal < -F_x_max)) {
                 climb_stage_ = climb_stage::extend_legs;
                 observer_->status_levitate_ = true;
                 pid_length_.ChangeParams({50, 0, 0, 50, 0, 0});
@@ -320,6 +321,7 @@ void jumping_fsm() {
     }
     void kinematic_controller() {
         double lqr_k[40];
+        double x_hat[10];
         if (status_flag.IsSpinning && status_flag.set_to_climb == false)
             LQR_k_spin(leg_length_->L, leg_length_->R, lqr_k);
         else if (status_flag.set_to_climb && status_flag.IsSpinning==false)
@@ -344,7 +346,11 @@ void jumping_fsm() {
         T_lwr_ = u_mat(1, 0);
         T_bll_ = u_mat(2, 0);
         T_blr_ = u_mat(3, 0);
-
+        x_states_hat(
+            T_bll_, T_blr_, T_lwl_, T_lwr_, dt, leg_length_->L, leg_length_->R, (*x_states_)(2, 0),
+            (*x_states_)(3, 0), (*x_states_)(0, 0), (*x_states_)(1, 0), (*x_states_)(8, 0),
+            (*x_states_)(9, 0), (*x_states_)(4, 0), (*x_states_)(6, 0), (*x_states_)(5, 0),
+            (*x_states_)(7, 0), x_hat);
         lqr_torque = T_lwl_;
     }
 
