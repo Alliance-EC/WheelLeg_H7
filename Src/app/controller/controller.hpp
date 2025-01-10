@@ -94,7 +94,7 @@ private:
     enum class climb_stage : uint8_t {
         ready_to_climb = 0,
         detect_step,
-        backward_legs,
+        contracting_legs,
         extend_legs,
         restand
     };
@@ -142,7 +142,7 @@ private:
 
     tool::filter::BandStopFilter T_l_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
     tool::filter::BandStopFilter T_r_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
-    void jumping_fsm() {
+void jumping_fsm() {
         static PID_params pid_length_param_storage   = pid_length_.GetParams();
         static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
         auto leg_length                              = (leg_length_->L + leg_length_->R) / 2.0;
@@ -177,7 +177,7 @@ private:
         case jump_stage::extending_legs: {
             pid_length_.ChangeParams({50, 0, 0, 50, 0, 0});
             pid_length_d_.ChangeParams({200, 0, 0, 1000, 0, 0}); // for fast leg movement
-            *length_desire_ = 0.35;
+            *length_desire_ = 0.34;
 
             if (leg_length > 0.32) {
                 jump_stage_ = jump_stage::contracting_legs_air;
@@ -195,7 +195,7 @@ private:
         case jump_stage::prepare_landing: {
             observer_->status_levitate_ = true;
 
-            if (leg_length < 0.13) {
+            if (leg_length < 0.13) {//最好改成离地检测
                 pid_length_.ChangeParams(pid_length_param_storage);
                 pid_length_d_.ChangeParams(pid_length_d_param_storage); // restore to normal
                 jump_stage_ = jump_stage::finish;
@@ -209,7 +209,7 @@ private:
             status_flag.moving_jump_cmd = false;
             break;
         }
-        default: break;
+        default: break; 
         }
     }
     //倾角过大，判定要翻倒
@@ -226,11 +226,12 @@ private:
         about_to_fall_ = false;
         }
     void climb_fsm(){
+        static PID_params pid_length_param_storage   = pid_length_.GetParams();
+        static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
+
         const double F_x_max=15.0;//摆角受力 30N 认为堵转
-        const double speed_b_normal=0.2;
         auto leg_length     = (leg_length_->L + leg_length_->R) / 2.0;
         Eigen::Vector<double, 3> x_error;
-        uint8_t direction = 1;
         x_error(0) = std::abs((*xd_)(4, 0) - (*x_states_)(4, 0));
         x_error(1) = std::abs((*xd_)(6, 0) - (*x_states_)(6, 0));
         x_error(2) = std::abs((*x_states_)(0, 0));
@@ -243,30 +244,37 @@ private:
             break;
         }
         case climb_stage::detect_step:{
-            if (observer_->F_x_.L > F_x_max && observer_->F_x_.R >F_x_max){
-                climb_stage_ = climb_stage::backward_legs;
-            }
-            else if (observer_->F_x_.L < -F_x_max && observer_->F_x_.R <-F_x_max){
-                climb_stage_ = climb_stage::backward_legs;
+            if ((observer_->F_x_.L > F_x_max && observer_->F_x_.R > F_x_max)
+                || (observer_->F_x_.L < -F_x_max && observer_->F_x_.R < -F_x_max)) {
+                climb_stage_ = climb_stage::extend_legs;
+                observer_->status_levitate_ = true;
+                pid_length_.ChangeParams({50, 0, 0, 50, 0, 0});
+                pid_length_d_.ChangeParams({200, 0, 0, 1000, 0, 0});
             }
             break;
         }
-        case climb_stage::backward_legs:{
-            climb_stage_ = climb_stage::extend_legs;
+        case climb_stage::contracting_legs: {
+            *length_desire_ = 0.35;
+            observer_->status_levitate_ = true;
+            if (leg_length >0.34) {
+                climb_stage_ = climb_stage::extend_legs;
+            }
             break;
         }
         case climb_stage::extend_legs: {
-            *length_desire_ = 0.12;
+            *length_desire_ = 0.11;
+            observer_->status_levitate_ = true;
+            //倾倒检测会自动收腿，但是时机可能不对,选择直接关闭倾倒检测
             if (leg_length < 0.13) {
                 climb_stage_ = climb_stage::restand;
+                pid_length_.ChangeParams(pid_length_param_storage);
+                pid_length_d_.ChangeParams(pid_length_d_param_storage);
             }
             break;
         }
         case climb_stage::restand: {
-            if (x_error(2) < speed_b_normal) {
                 climb_stage_=climb_stage::ready_to_climb;
                 status_flag.set_to_climb=false;
-            }
             break;
         }
     }
@@ -403,7 +411,7 @@ private:
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
 
-        if (observer_->status_levitate_ || climb_stage_ == climb_stage::backward_legs ||climb_stage_ == climb_stage::extend_legs||climb_stage_ == climb_stage::restand) {
+        if (observer_->status_levitate_) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }

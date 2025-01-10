@@ -89,7 +89,7 @@ void Init() {
 
     auto M3508_config = device::DjiMotorConfig(device::DjiMotorType::M3508)
                             .enable_multi_turn_angle()
-                            .set_reduction_ratio(13.0);
+                            .set_reduction_ratio(268.0/17.0);
     M3508_instance[1]->configure(M3508_config);
     M3508_instance[0]->configure(M3508_config.reverse()); // 先正后反 顺序不要变
 
