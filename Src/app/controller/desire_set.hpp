@@ -253,6 +253,8 @@ private:
         desires.roll       = 0;
         desires.leg_length = 0.12;
         chassis_mode_      = chassis_mode::stop;
+        status_flag.moving_jump_cmd = false;
+        status_flag.stand_jump_cmd  = false;
         SuperCap_ON_       = false;
     }
     void motor_alive_detect() {

@@ -169,11 +169,10 @@ void jumping_fsm() {
         //     }
         // }
         case jump_stage::contracting_legs: {
-            *length_desire_             = 0.14;
-            // observer_->status_levitate_ = false;
-            if (leg_length < 0.16) {
+            // *length_desire_             = 0.14;
+            // if (leg_length < 0.16) {
                 jump_stage_ = jump_stage::extending_legs;
-            }
+            // }
             break;
         }
         case jump_stage::extending_legs: {
