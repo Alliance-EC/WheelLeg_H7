@@ -462,18 +462,18 @@ void jumping_fsm() {
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
     }
     void wheel_speed_limit(){
-        const double kp =0.02;
+        const double kp =1;
         const double torque_max=20.0;
         for (int i = 0; i < 2; i++) {
             if (wheel_speed_hat[i] >= 0) {
-                if (M3508_[i]->get_velocity() > wheel_speed_hat[i]) {
-                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),3);
+                if (M3508_[i]->get_velocity() > wheel_speed_hat[i]+5) {
+                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),1);
                 } else {
                     torque_for_limit[i] = 0;
                 }
             } else if (wheel_speed_hat[i] < 0) {
-                if (M3508_[i]->get_velocity() < wheel_speed_hat[i]) {
-                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),3);
+                if (M3508_[i]->get_velocity() < wheel_speed_hat[i]-5) {
+                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),1);
                 } else {
                     torque_for_limit[i] = 0;
                 }
