@@ -100,6 +100,8 @@ private:
         extend_legs,
         restand
     };
+    double torque_for_limit[2] = {};
+    double torque_after_limit[2] = {};
     double F_l_ = 0, F_r_ = 0;
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
     double T_lwl_compensate_ = 0, T_lwr_compensate_ = 0;
@@ -346,11 +348,13 @@ void jumping_fsm() {
         T_lwr_ = u_mat(1, 0);
         T_bll_ = u_mat(2, 0);
         T_blr_ = u_mat(3, 0);
+        torque_after_limit[0] = std::clamp(T_lwl_ + torque_for_limit[0], -5.0, 5.0);
+        torque_after_limit[1] = std::clamp(T_lwr_ + torque_for_limit[1], -5.0, 5.0);
         x_states_hat(
-            T_bll_, T_blr_, T_lwl_, T_lwr_, dt, leg_length_->L, leg_length_->R, (*x_states_)(2, 0),
-            (*x_states_)(3, 0), (*x_states_)(0, 0), (*x_states_)(1, 0), (*x_states_)(8, 0),
-            (*x_states_)(9, 0), (*x_states_)(4, 0), (*x_states_)(6, 0), (*x_states_)(5, 0),
-            (*x_states_)(7, 0), x_hat);
+            T_bll_, T_blr_, torque_after_limit[0], torque_after_limit[1], dt, leg_length_->L,
+            leg_length_->R, (*x_states_)(2, 0), (*x_states_)(3, 0), (*x_states_)(0, 0),
+            (*x_states_)(1, 0), (*x_states_)(8, 0), (*x_states_)(9, 0), (*x_states_)(4, 0),
+            (*x_states_)(6, 0), (*x_states_)(5, 0), (*x_states_)(7, 0), x_hat);
         lqr_torque = T_lwl_;
 
         speed_hat_watch[0]=wheel_speed_hat[0];
@@ -431,12 +435,14 @@ void jumping_fsm() {
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
 
+        T_lwl_+=torque_for_limit[0];
+        T_lwr_+=torque_for_limit[1];
         if (observer_->status_levitate_) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }
-
         constexpr double max_torque_wheel = 5.0f;
+        
         control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
         control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
         if (*mode_ != chassis_mode::balanceless) {
@@ -456,7 +462,6 @@ void jumping_fsm() {
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
     }
     void wheel_speed_limit(){
-        double torque_for_limit[2]={};
         const double kp =0.02;
         const double torque_max=20.0;
         for (int i = 0; i < 2; i++) {
@@ -475,8 +480,8 @@ void jumping_fsm() {
             }
             torque[i] = torque_for_limit[i] ;//= std::clamp(torque_for_limit[i], -torque_max, torque_max);
         }
-    T_lwl_ += torque_for_limit[0];
-    T_lwr_ += torque_for_limit[1];
+    // T_lwl_ += torque_for_limit[0];
+    // T_lwr_ += torque_for_limit[1];
     }
     void stop_all_control() {
         control_torque_.wheel_L = nan;
