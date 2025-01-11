@@ -151,27 +151,27 @@ void jumping_fsm() {
 
         switch (jump_stage_) {
         case jump_stage::ready_to_jump: {
-            if (status_flag.stand_jump_cmd)
-                jump_stage_ = jump_stage::prepare_to_jump;
+            // if (status_flag.stand_jump_cmd)
+            //     jump_stage_ = jump_stage::prepare_to_jump;
             if (status_flag.moving_jump_cmd)
                 jump_stage_ = jump_stage::contracting_legs;
             break;
         }
-        case jump_stage::prepare_to_jump: {
-            constexpr double ideal_leg_angle = 0.5;
-            (*xd_)(4, 0) = (*xd_)(6, 0) = ideal_leg_angle;
-            auto error_L                = ideal_leg_angle - (*x_states_)(4, 0);
-            auto error_R                = ideal_leg_angle - (*x_states_)(6, 0);
+        // case jump_stage::prepare_to_jump: {
+        //     constexpr double ideal_leg_angle = 0.3;
+        //     (*xd_)(4, 0) = (*xd_)(6, 0) = ideal_leg_angle;
+        //     auto error_L                = ideal_leg_angle - (*x_states_)(4, 0);
+        //     auto error_R                = ideal_leg_angle - (*x_states_)(6, 0);
 
-            if (fabs(error_L) < 0.2 && fabs(error_R) < 0.2) {
-                jump_stage_ = jump_stage::contracting_legs;
-                break;
-            }
-        }
+        //     if (fabs(error_L) < 0.1 && fabs(error_R) < 0.1) {
+        //         // jump_stage_ = jump_stage::contracting_legs;
+        //         break;
+        //     }
+        // }
         case jump_stage::contracting_legs: {
-            *length_desire_             = 0.10;
-            observer_->status_levitate_ = false;
-            if (leg_length < 0.13) {
+            *length_desire_             = 0.14;
+            // observer_->status_levitate_ = false;
+            if (leg_length < 0.16) {
                 jump_stage_ = jump_stage::extending_legs;
             }
             break;
@@ -196,8 +196,8 @@ void jumping_fsm() {
         }
         case jump_stage::prepare_landing: {
             observer_->status_levitate_ = true;
-
-            if (leg_length < 0.13) {//最好改成离地检测
+            *length_desire_=0.17;
+            if (leg_length < 0.18&&leg_length>0.16) {
                 pid_length_.ChangeParams(pid_length_param_storage);
                 pid_length_d_.ChangeParams(pid_length_d_param_storage); // restore to normal
                 jump_stage_ = jump_stage::finish;
@@ -205,7 +205,7 @@ void jumping_fsm() {
             break;
         }
         case jump_stage::finish: {
-            observer_->status_levitate_ = false;
+            // observer_->status_levitate_ = false;
             jump_stage_                 = jump_stage::ready_to_jump;
             status_flag.stand_jump_cmd  = false;
             status_flag.moving_jump_cmd = false;
