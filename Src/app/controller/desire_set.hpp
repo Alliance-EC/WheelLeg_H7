@@ -11,6 +11,7 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+double max_speed_watch[2]={};
 namespace app::controller {
 struct desire {
     Eigen::Matrix<double, 10, 1> xd = Eigen::Matrix<double, 10, 1>::Zero();
@@ -133,16 +134,20 @@ public:
                 desires.leg_length = 0.25;
             }
             SuperCap_ON_ = RC_->keyboard.shift;
+            
+            if (RC_->dial < -0.8){
 
-            if (RC_->dial < -0.8)
-                status_flag.stand_jump_cmd = true;
-            else if (RC_->dial > 0.8)
+            }
+                // status_flag.set_to_climb = false;
+            else if (RC_->dial > 0.8){
                 status_flag.moving_jump_cmd = true;
+                // status_flag.set_to_climb = false;
+            }
             // if (RC_->dial < -0.8)
             //     status_flag.set_to_climb = true;
             // else if (RC_->dial > 0.8)
             //     status_flag.set_to_climb = false;
-
+            status_flag.set_to_climb = true;
         } while (false);
         last_switch_right = RC_->switch_right;
         if (chassis_mode_ == chassis_mode::stop)
@@ -198,6 +203,7 @@ private:
 
         constexpr double power_kp = 0.26;
         power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
+        max_speed_watch[0]=power_limit_velocity;
         if (!supercap_->Info.enabled_)
             x_d_ref = std::clamp(x_d_ref, -power_limit_velocity, power_limit_velocity); // 功控
         x_d_ref = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);             // 上限
