@@ -457,23 +457,23 @@ void jumping_fsm() {
     }
     void wheel_speed_limit(){
         double torque_for_limit[2]={};
-        const double kp =1.0;
+        const double kp =0.02;
         const double torque_max=20.0;
         for (int i = 0; i < 2; i++) {
             if (wheel_speed_hat[i] >= 0) {
                 if (M3508_[i]->get_velocity() > wheel_speed_hat[i]) {
-                    torque_for_limit[i] = kp * (M3508_[i]->get_velocity() - wheel_speed_hat[i]);
+                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),3);
                 } else {
                     torque_for_limit[i] = 0;
                 }
             } else if (wheel_speed_hat[i] < 0) {
                 if (M3508_[i]->get_velocity() < wheel_speed_hat[i]) {
-                    torque_for_limit[i] = kp * (M3508_[i]->get_velocity() - wheel_speed_hat[i]);
+                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),3);
                 } else {
                     torque_for_limit[i] = 0;
                 }
             }
-            torque[i] = torque_for_limit[i] = std::clamp(torque_for_limit[i], -torque_max, torque_max);
+            torque[i] = torque_for_limit[i] ;//= std::clamp(torque_for_limit[i], -torque_max, torque_max);
         }
     T_lwl_ += torque_for_limit[0];
     T_lwr_ += torque_for_limit[1];

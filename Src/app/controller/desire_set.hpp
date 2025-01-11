@@ -147,7 +147,7 @@ public:
             //     status_flag.set_to_climb = true;
             // else if (RC_->dial > 0.8)
             //     status_flag.set_to_climb = false;
-            status_flag.set_to_climb = true;
+            status_flag.set_to_climb = false;
         } while (false);
         last_switch_right = RC_->switch_right;
         if (chassis_mode_ == chassis_mode::stop)
