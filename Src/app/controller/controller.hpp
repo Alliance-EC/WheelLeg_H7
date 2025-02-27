@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+double jump_states_watch_[2];
 bool watch_fall=false;
 double speed_hat_watch[2];
 double torque[2];
@@ -58,6 +59,9 @@ public:
             // wheel_model_hat();
             leg_split_corrector();
             torque_process();
+
+            jump_states<<height_,
+                height_dot_;
         } while (false);
     }
     void Init(
@@ -67,6 +71,7 @@ public:
         IMU_      = IMU;
         DM8009_   = DM8009;
         M3508_    = M3508;
+        imu_accel= &IMU->output_vector.accel_b;
         imu_euler = &IMU_->output_vector.euler_angle;
         imu_gyro  = &IMU_->output_vector.gyro;
         referee_  = referee;
@@ -138,9 +143,12 @@ private:
     double*  s_d_limit=&desire_->power_limit_velocity;
 
     const double* roll_desire_ = &desire_->desires.roll;
-    const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
+    const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr,*imu_accel=nullptr;
     const chassis_mode* mode_ = &chassis_mode_;
     double wheel_speed_hat[2]={0.0,0.0};
+
+    Eigen::Vector<double,2> jump_states;
+    double height_=0,height_dot_=0;
     jump_stage jump_stage_ = jump_stage::ready_to_jump;
     climb_stage climb_stage_ = climb_stage::ready_to_climb;
 
@@ -150,7 +158,7 @@ void jumping_fsm() {
         static PID_params pid_length_param_storage   = pid_length_.GetParams();
         static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
         auto leg_length                              = (leg_length_->L + leg_length_->R) / 2.0;
-
+        height_dot_ += (imu_accel->z()+0.1) * dt;
         switch (jump_stage_) {
         case jump_stage::ready_to_jump: {
             // if (status_flag.stand_jump_cmd)
@@ -174,6 +182,7 @@ void jumping_fsm() {
             // *length_desire_             = 0.14;
             // if (leg_length < 0.16) {
                 jump_stage_ = jump_stage::extending_legs;
+                height_dot_=0;
             // }
             break;
         }
@@ -200,7 +209,7 @@ void jumping_fsm() {
             *length_desire_=0.17;
             if (leg_length < 0.18&&leg_length>0.16) {
                 pid_length_.ChangeParams(pid_length_param_storage);
-                pid_length_d_.ChangeParams(pid_length_d_param_storage); // restore to normal
+                pid_length_d_.ChangeParams(pid_length_d_param_storage); 
                 jump_stage_ = jump_stage::finish;
             }
             break;
@@ -232,7 +241,7 @@ void jumping_fsm() {
         static PID_params pid_length_param_storage   = pid_length_.GetParams();
         static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
 
-        const double F_x_max=15.0;//摆角受力 30N 认为堵转
+        const double F_x_max=15.0;//摆角受力 15N 认为堵转
         auto leg_length     = (leg_length_->L + leg_length_->R) / 2.0;
         Eigen::Vector<double, 3> x_error;
         x_error(0) = std::abs((*xd_)(4, 0) - (*x_states_)(4, 0));
@@ -251,6 +260,7 @@ void jumping_fsm() {
                 || (observer_->F_x_.L_horiozontal < -F_x_max && observer_->F_x_.R_horiozontal < -F_x_max)) {
                 climb_stage_ = climb_stage::extend_legs;
                 observer_->status_levitate_ = true;
+                //快速收腿，为了不影响机体姿态
                 pid_length_.ChangeParams({50, 0, 0, 50, 0, 0});
                 pid_length_d_.ChangeParams({200, 0, 0, 1000, 0, 0});
             }
@@ -434,9 +444,10 @@ void jumping_fsm() {
     void torque_process() {
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
-
-        T_lwl_+=torque_for_limit[0];
-        T_lwr_+=torque_for_limit[1];
+        if (status_flag.moving_jump_cmd==false) {
+            T_lwl_+=torque_for_limit[0];
+            T_lwr_+=torque_for_limit[1];
+        }
         if (observer_->status_levitate_) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());

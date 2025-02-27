@@ -59,7 +59,7 @@ static std::array<volatile double*, 3> supercap_voltage_array = {
     &supercap_instance->Info.chassis_power_, &supercap_instance->Info.chassis_voltage_, &supercap_instance->Info.supercap_voltage_
 };
 static volatile bool SuperCap_enable_watch;
-// static volatile int dm8009_encoder_watch[4] = {};
+static uint8_t jump;
 void Init() {
     __disable_irq();
     IMU_instance = new module::IMU(
