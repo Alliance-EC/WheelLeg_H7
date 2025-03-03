@@ -12,8 +12,10 @@
 #include <cmath>
 #include <limits>
 
-double watch_support[2]={};
-bool parking =false;
+double watch_support[2] = {};
+double leg_watch[6]     = {};
+bool parking            = false;
+double watch_speed[2]   = {};
 namespace app::observer {
 struct leg_length {
     double L;
@@ -22,6 +24,12 @@ struct leg_length {
     double R;
     double Rd;
     double Rdd;
+};
+struct leg_theta {
+    double L;
+    double Ld;
+    double R;
+    double Rd;
 };
 struct support_force {
     double L;
@@ -36,6 +44,10 @@ struct F_x {
     double R_tan;
     double L_horiozontal;
     double R_horiozontal;
+};
+struct Rw_calc {
+    double R_r;
+    double R_l;
 };
 class observer {
 public:
@@ -82,10 +94,11 @@ public:
     // output variables
     Eigen::Matrix<double, 10, 1> x_states_;
     leg_length leg_length_;
+    leg_theta leg_theta_;
     support_force support_force_;
 
     F_x F_x_;
-    
+
     bool status_levitate_;
     bool status_levitate_L_;
     bool status_levitate_R_;
@@ -120,8 +133,8 @@ private:
     double dt_ = app::dt;
     uint32_t last_time;
     bool allow_levitate_              = true;
-    bool allow_levitate_L_              = true;
-    bool allow_levitate_R_              = true;
+    bool allow_levitate_L_            = true;
+    bool allow_levitate_R_            = true;
     bool parking_mode_                = false;
     const Eigen::Vector3f *imu_accel_ = nullptr, *imu_gyro_ = nullptr, *imu_euler_ = nullptr;
     Eigen::Vector<double, 4>* u_mat_ = nullptr;
@@ -154,11 +167,17 @@ private:
         leg_length_.L = data[0];                                // ll
         leg_length_.L = length_L_LPF_.update(leg_length_.L);
 
-        theta_L_ = data[1] + imu_euler_->y();                   // 5 theta_ll
+        leg_watch[0] = leg_length_.L;
 
+        theta_L_     = data[1] + imu_euler_->y();               // 5 theta_ll
+        leg_theta_.L = theta_L_;
+        leg_watch[2] = theta_L_;
+        leg_watch[4] = leg_length_.L * cos(theta_L_);
         theta_Ld_    = (theta_L_ - last_theta_L) / dt_;         // 6 theta_lld
 
-        theta_Ld_    = angle_Ld_LPF_.update(theta_Ld_);
+        theta_Ld_     = angle_Ld_LPF_.update(theta_Ld_);
+        leg_theta_.Ld = theta_Ld_;
+
         last_theta_L = theta_L_;
 
         theta_Ldd_    = (theta_Ld_ - last_theta_Ld) / dt_;
@@ -175,12 +194,17 @@ private:
         leg_length_.R = data[0];                                // lr
         leg_length_.R = length_R_LPF_.update(leg_length_.R);
 
-        theta_R_ = data[1] + imu_euler_->y();                   // 7 theta_lr
+        leg_watch[1] = leg_length_.R;
 
+        theta_R_     = data[1] + imu_euler_->y();               // 7 theta_lr
+        leg_theta_.R = theta_R_;
+        leg_watch[3] = theta_R_;
+        leg_watch[5] = leg_length_.R * cos(theta_R_);
         theta_Rd_    = (theta_R_ - last_theta_R) / dt_;         // 8 theta_lrd
 
-        theta_Rd_    = angle_Rd_LPF_.update(theta_Rd_);
-        last_theta_R = theta_R_;
+        theta_Rd_     = angle_Rd_LPF_.update(theta_Rd_);
+        leg_theta_.Rd = theta_Rd_;
+        last_theta_R  = theta_R_;
 
         theta_Rdd_    = (theta_Rd_ - last_theta_Rd) / dt_;
         last_theta_Rd = theta_Rd_;
@@ -203,17 +227,22 @@ private:
             leg_length_.L * std::cos(theta_L_) * theta_Ld_ + leg_length_.Ld * std::sin(theta_L_);
         auto v_lr =
             leg_length_.R * std::cos(theta_R_) * theta_Rd_ + leg_length_.Rd * std::sin(theta_R_);
-        auto s_bd     = s_dot + (v_ll + v_lr) / 2;
-        double z[2]   = {s_bd, IMU_->output_vector.accel_b.x()};
-        auto s_bd_est = velocity_kalman_.update(z);
-        velocity_     = s_bd_est;
+        auto s_bd = s_dot + (v_ll + v_lr) / 2;
 
+        watch_speed[0] = s_bd;
+        double z[2]    = {s_bd, IMU_->output_vector.accel_b.x()};
+        auto s_bd_est  = velocity_kalman_.update(z);
+        watch_speed[1] = s_bd_est;
+        velocity_      = s_bd_est;
+        if (*chassis_mode_ == chassis_mode::spin_control) {
+            velocity_ = s_bd;
+        }
         if (!status_flag.IsControlling && std::fabs(s_dot) < 1e-2) { // 等待验证
             parking_mode_ = true;
         } else if (status_flag.IsControlling) {
             parking_mode_ = false;
         }
-        parking=parking_mode_;
+        parking = parking_mode_;
         if (parking_mode_) { // when the robot is not moving, change to distance control
             velocity_kalman_.set_parking();
             distance_ += velocity_ * dt_;
@@ -234,11 +263,11 @@ private:
                        + 2 * leg_length_.Ld * std::sin(theta_L_) * theta_Ld_
                        + leg_length_.L * std::cos(theta_L_) * theta_Ld_ * theta_Ld_
                        + leg_length_.L * std::sin(theta_L_) * theta_Ldd_;
-        support_force_.L_last=support_force_.L;
-        support_force_.L = P_l + z_wl_ddot * m_w;
-        support_force_.L_d=support_force_.L-support_force_.L_last;
-        F_x_.L_tan=T_l;
-        F_x_.L_horiozontal   = F_l * std::sin(theta_L_) + T_l * std::cos(theta_L_);
+        support_force_.L_last = support_force_.L;
+        support_force_.L      = P_l + z_wl_ddot * m_w;
+        support_force_.L_d    = support_force_.L - support_force_.L_last;
+        F_x_.L_tan            = T_l;
+        F_x_.L_horiozontal    = F_l * std::sin(theta_L_) + T_l * std::cos(theta_L_);
 
         leg_conv_reverse(
             DM8009_[leg_RF]->get_torque(), DM8009_[leg_RB]->get_torque(),
@@ -250,20 +279,21 @@ private:
                        + 2 * leg_length_.Rd * std::sin(theta_R_) * theta_Rd_
                        + leg_length_.R * std::cos(theta_R_) * theta_Rd_ * theta_Rd_
                        + leg_length_.R * std::sin(theta_R_) * theta_Rdd_;
-        support_force_.R_last=support_force_.R;
-        support_force_.R = P_r + z_wr_ddot * m_w;
-        support_force_.R_d=support_force_.R-support_force_.R_last;
-        F_x_.R_tan               = T_r;
-        F_x_.R_horiozontal       = T_r;
-        watch_support[0]     = P_l;
-        watch_support[1]         = F_r * std::sin(theta_R_) + T_r * std::cos(theta_R_);
+        support_force_.R_last = support_force_.R;
+        support_force_.R      = P_r + z_wr_ddot * m_w;
+        support_force_.R_d    = support_force_.R - support_force_.R_last;
+        F_x_.R_tan            = T_r;
+        F_x_.R_horiozontal    = T_r;
+        watch_support[0]      = P_l;
+        watch_support[1]      = F_r * std::sin(theta_R_) + T_r * std::cos(theta_R_);
     }
     void levitate_detect() {
-        //无头参数，记得改回
-        constexpr double force_levitate = 15.0;
-        constexpr double force_normal   = 40.0;
-        // constexpr double force_levitate = 20.0;
-        // constexpr double force_normal   = 50.0;
+        // // 无头参数，记得改回
+        // constexpr double force_levitate = 15.0;
+        // constexpr double force_normal   = 40.0;
+        // 有头参数
+        constexpr double force_levitate = 20.0;
+        constexpr double force_normal   = 50.0;
         auto support_force_avg          = (support_force_.L + support_force_.R) / 2.0;
         if ((support_force_avg < force_levitate) && allow_levitate_
             && (*chassis_mode_ != chassis_mode::stop)

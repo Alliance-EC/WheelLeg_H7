@@ -1,6 +1,5 @@
 #pragma once
 #include "LQR_k.hpp"
-#include "x_states_hat.hpp"
 #include "LegConv.hpp"
 #include "app/observer/observer.hpp"
 #include "app/system_parameters.hpp"
@@ -11,16 +10,20 @@
 #include "speed_hat.hpp"
 #include "tool/filter/band_stop_fliter.hpp"
 #include "tool/pid/pid.hpp"
+#include "x_states_hat.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
 #include <limits>
-bool watch_fall=false;
+
+bool watch_fall = false;
 double speed_hat_watch[2];
 double torque[2];
 double lqr_torque;
 double limit_torque;
 double debug;
+double watch_roll[6]   = {};
+double watch_torque[6] = {};
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -55,7 +58,7 @@ public:
             anti_fall_check();
             watch_fall = about_to_fall_;
             leg_controller();
-            // wheel_model_hat();
+            wheel_model_hat();
             leg_split_corrector();
             torque_process();
         } while (false);
@@ -100,7 +103,8 @@ private:
         extend_legs,
         restand
     };
-    double torque_for_limit[2] = {};
+    double torque_for_limit[2]   = {};
+    double torque_for_spin[2]    = {};
     double torque_after_limit[2] = {};
     double F_l_ = 0, F_r_ = 0;
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
@@ -108,14 +112,14 @@ private:
     double T_bll_compensate_ = 0, T_blr_compensate_ = 0;
     double wheel_speed_hat_[2]      = {};
     bool about_to_fall_             = false;
-    bool about_to_fall_last_             = false;
+    bool about_to_fall_last_        = false;
     bool allow_re_stand             = false;
     tool::daemon fall_resume_timer_ = tool::daemon(0.5, std::bind(&Controller::fall_resume, this));
-    double wheel_compensate_kp_ = 0.25;
-    PID pid_roll_               = PID({300, 0, 0, 500, 0.0, 0.0, dt});
-    PID pid_roll_d_             = PID({30, 0, 0, 500, 0.0, 0.0, dt});
-    PID pid_length_             = PID({12, 0, 0, 6, 100.0, 0.0, dt});
-    PID pid_length_d_           = PID({150, 0, 0, 400, 100.0, 0.0, dt});
+    double wheel_compensate_kp_     = 0.25;
+    PID pid_roll_                   = PID({300, 0, 0, 500, 0.0, 0.0, dt});
+    PID pid_roll_d_                 = PID({30, 0, 0, 500, 0.0, 0.0, dt});
+    PID pid_length_                 = PID({12, 0, 0, 6, 100.0, 0.0, dt});
+    PID pid_length_d_               = PID({150, 0, 0, 400, 100.0, 0.0, dt});
 
     PID wheel_L_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
     PID wheel_R_PID_ = PID({0.6, 0.0, 0.0, 4.0, 0.0, 0.0, dt});
@@ -130,23 +134,25 @@ private:
     device::SuperCap* SuperCap_             = nullptr;
     module::referee::Status* referee_       = nullptr;
 
-    Eigen::Matrix<double, 10, 1>* xd_ = &desire_->desires.xd;    // will be modified by jumping_fsm
+    Eigen::Matrix<double, 10, 1>* xd_ = &desire_->desires.xd; // will be modified by jumping_fsm
     const Eigen::Matrix<double, 10, 1>* x_states_ = &observer_->x_states_;
     const observer::leg_length* leg_length_       = &observer_->leg_length_;
-    double* length_desire_     = &desire_->desires.leg_length;   // will be modified by jumping_fsm
-    //
-    double*  s_d_limit=&desire_->power_limit_velocity;
+    const observer::leg_theta* leg_theta_         = &observer_->leg_theta_;
 
-    const double* roll_desire_ = &desire_->desires.roll;
+    double* length_desire_ = &desire_->desires.leg_length;    // will be modified by jumping_fsm
+    //
+    double* s_d_limit = &desire_->power_limit_velocity;
+
+    const double* roll_desire_       = &desire_->desires.roll;
     const Eigen::Vector3f *imu_euler = nullptr, *imu_gyro = nullptr;
     const chassis_mode* mode_ = &chassis_mode_;
-    double wheel_speed_hat[2]={0.0,0.0};
-    jump_stage jump_stage_ = jump_stage::ready_to_jump;
-    climb_stage climb_stage_ = climb_stage::ready_to_climb;
+    double wheel_speed_hat[2] = {0.0, 0.0};
+    jump_stage jump_stage_    = jump_stage::ready_to_jump;
+    climb_stage climb_stage_  = climb_stage::ready_to_climb;
 
     tool::filter::BandStopFilter T_l_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
     tool::filter::BandStopFilter T_r_BSF = tool::filter::BandStopFilter(25, 32, 1000, 3);
-void jumping_fsm() {
+    void jumping_fsm() {
         static PID_params pid_length_param_storage   = pid_length_.GetParams();
         static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
         auto leg_length                              = (leg_length_->L + leg_length_->R) / 2.0;
@@ -173,13 +179,13 @@ void jumping_fsm() {
         case jump_stage::contracting_legs: {
             // *length_desire_             = 0.14;
             // if (leg_length < 0.16) {
-                jump_stage_ = jump_stage::extending_legs;
+            jump_stage_ = jump_stage::extending_legs;
             // }
             break;
         }
         case jump_stage::extending_legs: {
             pid_length_.ChangeParams({50, 0, 0, 50, 0, 0});
-            pid_length_d_.ChangeParams({200, 0, 0, 1000, 0, 0}); // for fast leg movement
+            pid_length_d_.ChangeParams({200, 0, 0, 1000, 0, 0});        // for fast leg movement
             *length_desire_ = 0.34;
 
             if (leg_length > 0.32) {
@@ -188,7 +194,7 @@ void jumping_fsm() {
             break;
         }
         case jump_stage::contracting_legs_air: {
-            *length_desire_ = 0.14;
+            *length_desire_             = 0.14;
             observer_->status_levitate_ = true;
             if (leg_length < 0.15) {
                 jump_stage_ = jump_stage::prepare_landing;
@@ -197,8 +203,8 @@ void jumping_fsm() {
         }
         case jump_stage::prepare_landing: {
             observer_->status_levitate_ = true;
-            *length_desire_=0.17;
-            if (leg_length < 0.18&&leg_length>0.16) {
+            *length_desire_             = 0.17;
+            if (leg_length < 0.18 && leg_length > 0.16) {
                 pid_length_.ChangeParams(pid_length_param_storage);
                 pid_length_d_.ChangeParams(pid_length_d_param_storage); // restore to normal
                 jump_stage_ = jump_stage::finish;
@@ -212,44 +218,45 @@ void jumping_fsm() {
             status_flag.moving_jump_cmd = false;
             break;
         }
-        default: break; 
+        default: break;
         }
     }
-    //倾角过大，判定要翻倒
+    // 倾角过大，判定要翻倒
     void anti_fall_check() {
-        about_to_fall_last_=about_to_fall_;
+        about_to_fall_last_ = about_to_fall_;
         if (fabs(imu_euler->y()) > (0.1 + observer_->leg_length_avg_ * 0.5)) {
             about_to_fall_ = true;
             fall_resume_timer_.reload();
         }
-        if (observer_->status_levitate_)                                // 腾空状态不会触发
+        if (observer_->status_levitate_) // 腾空状态不会触发
+            about_to_fall_ = false;
+        if (*mode_ == chassis_mode::spin_control)
             about_to_fall_ = false;
     }
-    void fall_resume() { 
-        about_to_fall_ = false;
-        }
-    void climb_fsm(){
+    void fall_resume() { about_to_fall_ = false; }
+    void climb_fsm() {
         static PID_params pid_length_param_storage   = pid_length_.GetParams();
         static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
 
-        const double F_x_max=15.0;//摆角受力 30N 认为堵转
-        auto leg_length     = (leg_length_->L + leg_length_->R) / 2.0;
+        const double F_x_max = 15.0;     // 摆角受力 30N 认为堵转
+        auto leg_length      = (leg_length_->L + leg_length_->R) / 2.0;
         Eigen::Vector<double, 3> x_error;
         x_error(0) = std::abs((*xd_)(4, 0) - (*x_states_)(4, 0));
         x_error(1) = std::abs((*xd_)(6, 0) - (*x_states_)(6, 0));
         x_error(2) = std::abs((*x_states_)(0, 0));
-        
+
         switch (climb_stage_) {
-        case climb_stage::ready_to_climb:{
-            if (status_flag.set_to_climb==true){
-                climb_stage_=climb_stage::detect_step;
+        case climb_stage::ready_to_climb: {
+            if (status_flag.set_to_climb == true) {
+                climb_stage_ = climb_stage::detect_step;
             }
             break;
         }
-        case climb_stage::detect_step:{
+        case climb_stage::detect_step: {
             if ((observer_->F_x_.L_horiozontal > F_x_max && observer_->F_x_.R_horiozontal > F_x_max)
-                || (observer_->F_x_.L_horiozontal < -F_x_max && observer_->F_x_.R_horiozontal < -F_x_max)) {
-                climb_stage_ = climb_stage::extend_legs;
+                || (observer_->F_x_.L_horiozontal < -F_x_max
+                    && observer_->F_x_.R_horiozontal < -F_x_max)) {
+                climb_stage_                = climb_stage::extend_legs;
                 observer_->status_levitate_ = true;
                 pid_length_.ChangeParams({50, 0, 0, 50, 0, 0});
                 pid_length_d_.ChangeParams({200, 0, 0, 1000, 0, 0});
@@ -257,17 +264,17 @@ void jumping_fsm() {
             break;
         }
         case climb_stage::contracting_legs: {
-            *length_desire_ = 0.35;
+            *length_desire_             = 0.35;
             observer_->status_levitate_ = true;
-            if (leg_length >0.34) {
+            if (leg_length > 0.34) {
                 climb_stage_ = climb_stage::extend_legs;
             }
             break;
         }
         case climb_stage::extend_legs: {
-            *length_desire_ = 0.11;
+            *length_desire_             = 0.11;
             observer_->status_levitate_ = true;
-            //倾倒检测会自动收腿，但是时机可能不对,选择直接关闭倾倒检测
+            // 倾倒检测会自动收腿，但是时机可能不对,选择直接关闭倾倒检测
             if (leg_length < 0.13) {
                 climb_stage_ = climb_stage::restand;
                 pid_length_.ChangeParams(pid_length_param_storage);
@@ -276,16 +283,16 @@ void jumping_fsm() {
             break;
         }
         case climb_stage::restand: {
-                climb_stage_=climb_stage::ready_to_climb;
-                status_flag.set_to_climb=false;
+            climb_stage_             = climb_stage::ready_to_climb;
+            status_flag.set_to_climb = false;
             break;
         }
-    }
+        }
     }
     void super_cap_controller() {
         // Maximum excess  when buffer energy is sufficient.
         constexpr double excess_power_limit = 35;
-        //电管可通过的最大功率
+        // 电管可通过的最大功率
         constexpr double refree_power_max = 200.0;
         //               power_limit_after_buffer_energy_closed_loop =
         constexpr double buffer_energy_control_line = 120; // = referee + excess
@@ -298,12 +305,18 @@ void jumping_fsm() {
         const auto power_buffer               = referee_->buffer_energy_;
 
         double power_limit_after_buffer_energy_closed_loop =
-            power_limit* std::clamp((power_buffer - buffer_energy_dead_line)
-                        / (buffer_energy_base_line - buffer_energy_dead_line),0.0, 1.0)
+            power_limit
+                * std::clamp(
+                    (power_buffer - buffer_energy_dead_line)
+                        / (buffer_energy_base_line - buffer_energy_dead_line),
+                    0.0, 1.0)
             + excess_power_limit
-                  * std::clamp((power_buffer - buffer_energy_base_line)
-                        / (buffer_energy_control_line - buffer_energy_base_line),0.0, 1.0);
-        SuperCap_set_.power_limit =static_cast<uint8_t>(power_limit_after_buffer_energy_closed_loop);
+                  * std::clamp(
+                      (power_buffer - buffer_energy_base_line)
+                          / (buffer_energy_control_line - buffer_energy_base_line),
+                      0.0, 1.0);
+        SuperCap_set_.power_limit =
+            static_cast<uint8_t>(power_limit_after_buffer_energy_closed_loop);
         /*超电自动开启后在缓冲能量充满时关闭，操作手按键开启的则不会自动关闭*/
         if ((power > power_limit) && (power_buffer / (power - power_limit) < 0.3)) {
             SuperCap_set_.enable = true;
@@ -312,7 +325,7 @@ void jumping_fsm() {
         } else if (power_buffer >= 60.0) {
             SuperCap_set_.enable = false;
         }
-        debug=SuperCap_->Info.chassis_power_;
+        debug = SuperCap_->Info.chassis_power_;
         if (desire_->SuperCap_ON_) {
             SuperCap_set_.enable = true;
         }
@@ -326,7 +339,7 @@ void jumping_fsm() {
         double x_hat[10];
         if (status_flag.IsSpinning && status_flag.set_to_climb == false)
             LQR_k_spin(leg_length_->L, leg_length_->R, lqr_k);
-        else if (status_flag.set_to_climb && status_flag.IsSpinning==false)
+        else if (status_flag.set_to_climb && status_flag.IsSpinning == false)
             LQR_k_climb(leg_length_->L, leg_length_->R, lqr_k);
         else
             LQR_k(leg_length_->L, leg_length_->R, lqr_k);
@@ -343,11 +356,11 @@ void jumping_fsm() {
             e_mat(8, 0) = 0;
             e_mat(9, 0) = 0;
         }
-        u_mat  = LQR_gain * e_mat;
-        T_lwl_ = u_mat(0, 0);
-        T_lwr_ = u_mat(1, 0);
-        T_bll_ = u_mat(2, 0);
-        T_blr_ = u_mat(3, 0);
+        u_mat                 = LQR_gain * e_mat;
+        T_lwl_                = u_mat(0, 0);
+        T_lwr_                = u_mat(1, 0);
+        T_bll_                = u_mat(2, 0);
+        T_blr_                = u_mat(3, 0);
         torque_after_limit[0] = std::clamp(T_lwl_ + torque_for_limit[0], -5.0, 5.0);
         torque_after_limit[1] = std::clamp(T_lwr_ + torque_for_limit[1], -5.0, 5.0);
         x_states_hat(
@@ -357,14 +370,14 @@ void jumping_fsm() {
             (*x_states_)(6, 0), (*x_states_)(5, 0), (*x_states_)(7, 0), x_hat);
         lqr_torque = T_lwl_;
 
-        speed_hat_watch[0]=wheel_speed_hat[0];
+        speed_hat_watch[0] = wheel_speed_hat[0];
         wheel_speed_hat[0] =
             ((x_hat[1] - (leg_length_->L + leg_length_->Ld * dt) * std::cos(x_hat[4]) * x_hat[5]
-                  - (leg_length_->Ld + leg_length_->Ldd * dt) * std::sin(x_hat[4]))
+              - (leg_length_->Ld + leg_length_->Ldd * dt) * std::sin(x_hat[4]))
              - x_hat[3] * R_l)
             / Rw;
 
-        speed_hat_watch[1]=wheel_speed_hat[1];
+        speed_hat_watch[1] = wheel_speed_hat[1];
         wheel_speed_hat[1] =
             (x_hat[1]
              - (+(leg_length_->R + leg_length_->Rd * dt) * std::cos(x_hat[6]) * x_hat[7]
@@ -386,27 +399,39 @@ void jumping_fsm() {
         auto length_desire = about_to_fall_ ? 0.12 : *length_desire_;
         auto roll_desire   = observer_->status_levitate_ ? 0.0 : *roll_desire_;
 
-        static PID_params pid_roll_param_storage   = pid_roll_.GetParams();
-        static PID_params pid_roll_d_param_storage = pid_roll_d_.GetParams();
-        static chassis_mode last_mode              = chassis_mode::stop;
+        static PID_params pid_roll_param_storage     = pid_roll_.GetParams();
+        static PID_params pid_roll_d_param_storage   = pid_roll_d_.GetParams();
+        static PID_params pid_length_param_storage   = pid_length_.GetParams();
+        static PID_params pid_length_d_param_storage = pid_length_d_.GetParams();
+
+        static chassis_mode last_mode = chassis_mode::stop;
         if (last_mode != chassis_mode::spin_control && *mode_ == chassis_mode::spin_control) {
-            pid_roll_.ChangeParams({1500, 0, 0, 500, 0, 0});
-            pid_roll_d_.ChangeParams({45, 0, 0, 500, 0, 0});
-        } else if (last_mode == chassis_mode::spin_control && *mode_ != chassis_mode::spin_control) {
+            pid_roll_.ChangeParams({1600, 0, 0, 80, 0, 0});
+            pid_roll_d_.ChangeParams({12, 0, 0, 50, 0, 0});
+            pid_length_.ChangeParams({6, 0, 0, 6, 0, 0});
+            pid_length_d_.ChangeParams({75, 0, 0, 400, 0, 0});
+        } else if (
+            last_mode == chassis_mode::spin_control && *mode_ != chassis_mode::spin_control) {
             pid_roll_.ChangeParams(pid_roll_param_storage);
             pid_roll_d_.ChangeParams(pid_roll_d_param_storage);
+            pid_length_.ChangeParams(pid_length_param_storage);
+            pid_length_d_.ChangeParams(pid_length_d_param_storage);
         }
 
         auto length_out      = pid_length_.update(length_desire, length);
         auto F_length        = pid_length_d_.update(length_out, length_d);
         auto roll_angle_out  = pid_roll_.update(roll_desire, observer_->roll_);
         auto roll_angled_out = pid_roll_d_.update(0, observer_->roll_d_);
+        watch_roll[0]        = roll_angle_out;
+        watch_roll[1]        = roll_angled_out;
         auto F_roll          = roll_angle_out + roll_angled_out;
 
-        F_l_ = F_length + F_roll + gravity_ff() - inertial_ff();
-        F_r_ = F_length - F_roll + gravity_ff() + inertial_ff();
+        F_l_ = F_length + F_roll * cos(leg_theta_->L) + gravity_ff() - inertial_ff();
+        F_r_ = F_length - F_roll * cos(leg_theta_->R) + gravity_ff() + inertial_ff();
 
-        last_mode = *mode_;
+        watch_roll[2] = F_roll * sin(leg_theta_->L);
+        watch_roll[3] = F_roll * sin(leg_theta_->R);
+        last_mode     = *mode_;
     }
     void wheel_model_hat() {
         // constexpr double predict_dt = 0.001; // 预测之后多少时间的值
@@ -434,17 +459,21 @@ void jumping_fsm() {
     void torque_process() {
         constexpr double LEG_MOTOR_T_MAX = 40.0f;
         constexpr double LEG_T_MAX       = 15.0f;
-
-        T_lwl_+=torque_for_limit[0];
-        T_lwr_+=torque_for_limit[1];
+        watch_torque[2]                  = T_lwl_; //+ 减速
+        watch_torque[3]                  = T_lwr_;
+        T_lwl_ += torque_for_limit[0] + torque_for_spin[0];
+        T_lwr_ += torque_for_limit[1] + torque_for_spin[1];
         if (observer_->status_levitate_) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
         }
         constexpr double max_torque_wheel = 5.0f;
-        
-        control_torque_.wheel_L           = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
-        control_torque_.wheel_R           = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
+
+        control_torque_.wheel_L = std::clamp(T_lwl_, -max_torque_wheel, max_torque_wheel);
+        control_torque_.wheel_R = std::clamp(T_lwr_, -max_torque_wheel, max_torque_wheel);
+        watch_torque[0]         = T_lwl_;          //+ 减速
+        watch_torque[1]         = T_lwr_;
+
         if (*mode_ != chassis_mode::balanceless) {
             control_torque_.wheel_L *= -1;
             control_torque_.wheel_R *= -1;
@@ -461,27 +490,31 @@ void jumping_fsm() {
         control_torque_.leg_RF = std::clamp(leg_T[0], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
         control_torque_.leg_RB = std::clamp(leg_T[1], -LEG_MOTOR_T_MAX, LEG_MOTOR_T_MAX);
     }
-    void wheel_speed_limit(){
-        const double kp =1;
-        const double torque_max=20.0;
+    void wheel_speed_limit() {
+
+        const double kp          = 1;
+        const double torque_max  = 20.0;
+        const double wheel2yaw_d = Rw / R_l;
+        double wheel_speed[2]    = {M3508_[0]->get_velocity(), M3508_[1]->get_velocity()};
         for (int i = 0; i < 2; i++) {
             if (wheel_speed_hat[i] >= 0) {
-                if (M3508_[i]->get_velocity() > wheel_speed_hat[i]+5) {
-                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),1);
+                if (wheel_speed[i] > wheel_speed_hat[i] + 5) {
+                    torque_for_limit[i] = kp * pow((wheel_speed[i] - wheel_speed_hat[i]), 1);
                 } else {
                     torque_for_limit[i] = 0;
                 }
             } else if (wheel_speed_hat[i] < 0) {
-                if (M3508_[i]->get_velocity() < wheel_speed_hat[i]-5) {
-                    torque_for_limit[i] = kp * pow((M3508_[i]->get_velocity() - wheel_speed_hat[i]),1);
+                if (wheel_speed[i] < wheel_speed_hat[i] - 5) {
+                    torque_for_limit[i] = kp * pow((wheel_speed[i] - wheel_speed_hat[i]), 1);
                 } else {
                     torque_for_limit[i] = 0;
                 }
             }
-            torque[i] = torque_for_limit[i] ;//= std::clamp(torque_for_limit[i], -torque_max, torque_max);
+            // torque[i] = torque_for_limit[i]; //= std::clamp(torque_for_limit[i], -torque_max,
+            // torque_max);
         }
-    // T_lwl_ += torque_for_limit[0];
-    // T_lwr_ += torque_for_limit[1];
+        // T_lwl_ += torque_for_limit[0];
+        // T_lwr_ += torque_for_limit[1];
     }
     void stop_all_control() {
         control_torque_.wheel_L = nan;

@@ -4,11 +4,12 @@
 #include <cstdint>
 
 namespace app {
-constexpr double m_b     = 10.61;  // 身体质量
+constexpr double m_b = 15.82; // 身体质量
+// constexpr double m_b     = 10.61;  // 无头身体质量
 constexpr double eta_l   = 0.2945; // 质心位置系数
 constexpr double m_l     = 1.289;
 constexpr double m_w     = 0.402;
-constexpr double R_l     = 0.2325;   // 半轮距
+constexpr double R_l     = 0.2325; // 半轮距
 constexpr double gravity = 9.80665;
 constexpr double Rw      = 0.07;   // 轮子半径
 
@@ -55,10 +56,10 @@ constexpr board this_board = board::DM_MC02;
 static struct s {
     bool IsControlling : 1 = false;
     bool IsSpinning    : 1 = false;
-// static bool IsControlling = false;
+    // static bool IsControlling = false;
     bool stand_jump_cmd  : 1 = false;
     bool moving_jump_cmd : 1 = false;
-    bool set_to_climb : 1 = false;    
+    bool set_to_climb    : 1 = false;
 } status_flag;
 static chassis_mode chassis_mode_;
 } // namespace app

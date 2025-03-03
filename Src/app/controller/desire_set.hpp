@@ -11,7 +11,8 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
-double max_speed_watch[2]={};
+double max_speed_watch[2] = {};
+double watch_yaw[2]       = {};
 namespace app::controller {
 struct desire {
     Eigen::Matrix<double, 10, 1> xd = Eigen::Matrix<double, 10, 1>::Zero();
@@ -24,7 +25,7 @@ public:
         static auto instance = new DesireSet();
         return instance;
     }
-    static constexpr double spinning_velocity = 9.0;
+    static constexpr double spinning_velocity = 18.0;
     static constexpr double x_velocity_scale  = 2.5;
     void update() {
         using namespace device;
@@ -95,18 +96,18 @@ public:
             switch (chassis_mode_) {
             case chassis_mode::follow:
                 if (RC_->keyboard.ctrl && (RC_->keyboard.w || RC_->keyboard.s)) {
-                    set_states_desire(RC_->joystick_right.x() + keyboard_xmove * 0.35);
+                    set_states_desire(RC_->joystick_right.x() + keyboard_xmove * 0.35, 0);
                 } else {
-                    set_states_desire(RC_->joystick_right.x() + keyboard_xmove);
+                    set_states_desire(RC_->joystick_right.x() + keyboard_xmove, 0);
                 }
                 set_length_desire(RC_->joystick_right.y() + keyboard_zmove);
                 break;
             case chassis_mode::sideways_L:
             case chassis_mode::sideways_R:
                 if (RC_->keyboard.ctrl && (RC_->keyboard.a || RC_->keyboard.d)) {
-                    set_states_desire(RC_->joystick_right.y() + keyboard_ymove * 0.35);
+                    set_states_desire(RC_->joystick_right.y() + keyboard_ymove * 0.35, 0);
                 } else {
-                    set_states_desire(RC_->joystick_right.y() + keyboard_ymove);
+                    set_states_desire(RC_->joystick_right.y() + keyboard_ymove, 0);
                 }
                 set_length_desire(RC_->joystick_right.x() + keyboard_zmove);
                 break;
@@ -134,25 +135,21 @@ public:
                 desires.leg_length = 0.25;
             }
             SuperCap_ON_ = RC_->keyboard.shift;
-            
-            if (RC_->dial < -0.8){
 
-            }
-                // status_flag.set_to_climb = false;
-            else if (RC_->dial > 0.8){
-                status_flag.moving_jump_cmd = true;
-                // status_flag.set_to_climb = false;
-            }
-            // if (RC_->dial < -0.8)
-            //     status_flag.set_to_climb = true;
-            // else if (RC_->dial > 0.8)
-            //     status_flag.set_to_climb = false;
             status_flag.set_to_climb = false;
         } while (false);
         last_switch_right = RC_->switch_right;
         if (chassis_mode_ == chassis_mode::stop)
             last_switch_right = RC_Switch::UNKNOWN;
         last_keyboard_ = RC_->keyboard;
+
+        watch_yaw[0] = IMU_data_->Yaw_multi_turn;
+        watch_yaw[1] = GM6020_yaw_->get_angle() + std::numbers::pi / 4;
+        if (watch_yaw[1] > std::numbers::pi * 2) {
+            watch_yaw[1] -= std::numbers::pi * 2;
+        } else if (watch_yaw[1] < -std::numbers::pi * 2) {
+            watch_yaw[1] += std::numbers::pi * 2;
+        }
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
@@ -197,13 +194,13 @@ private:
     bool balanceless_mode_              = false;
     bool motor_alive_                   = false;
 
-    double yaw_set=0.0;
-    void set_states_desire(double x_velocity, double rotation_velocity = 0.0) {
+    double yaw_set = 0.0;
+    void set_states_desire(double x_velocity, double rotation_velocity) {
         auto x_d_ref = x_velocity * x_velocity_scale;
 
         constexpr double power_kp = 0.26;
-        power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
-        max_speed_watch[0]=power_limit_velocity;
+        power_limit_velocity      = power_kp * std::sqrt(referee_->chassis_power_limit_);
+        max_speed_watch[0]        = power_limit_velocity;
         if (!supercap_->Info.enabled_)
             x_d_ref = std::clamp(x_d_ref, -power_limit_velocity, power_limit_velocity); // 功控
         x_d_ref = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);             // 上限
@@ -219,15 +216,21 @@ private:
             status_flag.IsControlling = true;
         else
             status_flag.IsControlling = false;
-        auto gimbal_yaw_angle  = GM6020_yaw_->get_angle();
+        auto gimbal_yaw_angle = GM6020_yaw_->get_angle() + std::numbers::pi * 3 / 4;
+        if (gimbal_yaw_angle > std::numbers::pi * 2) {
+            gimbal_yaw_angle -= std::numbers::pi * 2;
+        } else if (gimbal_yaw_angle < -std::numbers::pi * 2) {
+            gimbal_yaw_angle += std::numbers::pi * 2;
+        }
         status_flag.IsSpinning = false;
         switch (chassis_mode_) {    // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
-            // 无头
-            yaw_set += RC_->joystick_left.y() * 0.004;
-            desires.xd(2, 0) = yaw_set;
-            // desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
+            // // 无头
+            // yaw_set += RC_->joystick_left.y() * 0.004;
+            // desires.xd(2, 0) = yaw_set;
+            // 有头
+            desires.xd(2, 0) = IMU_data_->Yaw_multi_turn + (gimbal_yaw_angle - std::numbers::pi);
             break;
         case chassis_mode::spin:
         case chassis_mode::spin_control: {
@@ -238,8 +241,14 @@ private:
         }
         default: break;
         }
-        for (uint8_t i = 3; i < 10; i++) {
-            desires.xd(i, 0) = 0;
+        if (chassis_mode_ != chassis_mode::spin_control) {
+            for (uint8_t i = 3; i < 10; i++) {
+                desires.xd(i, 0) = 0;
+            }
+        } else {
+            for (uint8_t i = 4; i < 10; i++) {
+                desires.xd(i, 0) = 0;
+            }
         }
     }
     void set_length_desire(double length_speed) {
@@ -256,12 +265,12 @@ private:
     }
     void reset_all_controls() {
         desires.xd.setZero();
-        desires.roll       = 0;
-        desires.leg_length = 0.12;
-        chassis_mode_      = chassis_mode::stop;
+        desires.roll                = 0;
+        desires.leg_length          = 0.12;
+        chassis_mode_               = chassis_mode::stop;
         status_flag.moving_jump_cmd = false;
         status_flag.stand_jump_cmd  = false;
-        SuperCap_ON_       = false;
+        SuperCap_ON_                = false;
     }
     void motor_alive_detect() {
         motor_alive_ = false;
@@ -275,10 +284,10 @@ private:
                 return;
             }
         }
-        //无头模式，待改回
-        // if (!GM6020_yaw_->get_online_states()) {
-        //     return;
-        // }
+        // 无头模式，待改回
+        if (!GM6020_yaw_->get_online_states()) {
+            return;
+        }
         motor_alive_ = true;
     }
 };
