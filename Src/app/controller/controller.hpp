@@ -24,6 +24,7 @@ double limit_torque;
 double debug;
 double watch_roll[6]   = {};
 double watch_torque[6] = {};
+bool robot_dead=false;
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -104,7 +105,6 @@ private:
         restand
     };
     double torque_for_limit[2]   = {};
-    double torque_for_spin[2]    = {};
     double torque_after_limit[2] = {};
     double F_l_ = 0, F_r_ = 0;
     double T_lwl_ = 0, T_lwr_ = 0, T_bll_ = 0, T_blr_ = 0;
@@ -297,12 +297,12 @@ private:
         //               power_limit_after_buffer_energy_closed_loop =
         constexpr double buffer_energy_control_line = 120; // = referee + excess
         constexpr double buffer_energy_base_line    = 50;  // = referee
-        constexpr double buffer_energy_dead_line    = 0;   // = 0
+        constexpr double buffer_energy_dead_line    = 0;   // 
 
         device::SuperCapControl SuperCap_set_ = {};
         const auto power_limit                = referee_->chassis_power_limit_;
         const auto power                      = referee_->chassis_power_;
-        const auto power_buffer               = referee_->buffer_energy_;
+        const auto power_buffer               = referee_->buffer_energy_;//缓冲能量
 
         double power_limit_after_buffer_energy_closed_loop =
             power_limit
@@ -333,6 +333,8 @@ private:
             SuperCap_set_.enable = false;
         }
         SuperCap_->write_data(SuperCap_set_);
+        
+        robot_dead=(power_buffer==0 && power>power_limit)?true:false;
     }
     void kinematic_controller() {
         double lqr_k[40];
@@ -393,7 +395,6 @@ private:
         auto inertial_ff          = [=, this]() {
             auto coefficient = length / (2 * R_l) * (*x_states_)(3, 0) * (*x_states_)(1, 0);
             return (m_b / 2.0 + eta_l * m_l) * coefficient;
-            // return 0;
         };
 
         auto length_desire = about_to_fall_ ? 0.12 : *length_desire_;
@@ -461,8 +462,8 @@ private:
         constexpr double LEG_T_MAX       = 15.0f;
         watch_torque[2]                  = T_lwl_; //+ 减速
         watch_torque[3]                  = T_lwr_;
-        T_lwl_ += torque_for_limit[0] + torque_for_spin[0];
-        T_lwr_ += torque_for_limit[1] + torque_for_spin[1];
+        T_lwl_ += torque_for_limit[0];
+        T_lwr_ += torque_for_limit[1];
         if (observer_->status_levitate_) {
             T_lwl_ = -wheel_L_PID_.update(0, M3508_[wheel_L]->get_velocity());
             T_lwr_ = -wheel_R_PID_.update(0, M3508_[wheel_R]->get_velocity());
@@ -494,7 +495,7 @@ private:
 
         const double kp          = 1;
         const double torque_max  = 20.0;
-        const double wheel2yaw_d = Rw / R_l;
+        // const double wheel2yaw_d = Rw / R_l;
         double wheel_speed[2]    = {M3508_[0]->get_velocity(), M3508_[1]->get_velocity()};
         for (int i = 0; i < 2; i++) {
             if (wheel_speed_hat[i] >= 0) {
@@ -510,7 +511,7 @@ private:
                     torque_for_limit[i] = 0;
                 }
             }
-            // torque[i] = torque_for_limit[i]; //= std::clamp(torque_for_limit[i], -torque_max,
+            torque[i] = torque_for_limit[i]; //= std::clamp(torque_for_limit[i], -torque_max,
             // torque_max);
         }
         // T_lwl_ += torque_for_limit[0];
