@@ -21,10 +21,10 @@ double speed_hat_watch[2];
 double torque[2];
 double lqr_torque;
 double limit_torque;
-double debug;
+double chassis_power_watch[7];
 double watch_roll[6]   = {};
 double watch_torque[6] = {};
-bool robot_dead=false;
+bool robot_dead        = false;
 namespace app::controller {
 using namespace tool;
 struct control_torque {
@@ -297,12 +297,13 @@ private:
         //               power_limit_after_buffer_energy_closed_loop =
         constexpr double buffer_energy_control_line = 120; // = referee + excess
         constexpr double buffer_energy_base_line    = 50;  // = referee
-        constexpr double buffer_energy_dead_line    = 0;   // 
+        constexpr double buffer_energy_dead_line    = 0;
 
         device::SuperCapControl SuperCap_set_ = {};
-        const auto power_limit                = referee_->chassis_power_limit_;
-        const auto power                      = referee_->chassis_power_;
-        const auto power_buffer               = referee_->buffer_energy_;//缓冲能量
+        // const auto power_limit                = referee_->chassis_power_limit_;
+        const auto power_limit  = 60.0;
+        const auto power        = referee_->chassis_power_;
+        const auto power_buffer = referee_->buffer_energy_; // 缓冲能量
 
         double power_limit_after_buffer_energy_closed_loop =
             power_limit
@@ -325,7 +326,13 @@ private:
         } else if (power_buffer >= 60.0) {
             SuperCap_set_.enable = false;
         }
-        debug = SuperCap_->Info.chassis_power_;
+        chassis_power_watch[0] = SuperCap_->Info.chassis_power_;
+        chassis_power_watch[1] = power_limit_after_buffer_energy_closed_loop;
+        chassis_power_watch[2] = SuperCap_set_.enable;
+        chassis_power_watch[3] = power_buffer;
+        chassis_power_watch[4] = power;
+        chassis_power_watch[5] = power_limit;
+        chassis_power_watch[6] = SuperCap_->Info.supercap_voltage_;
         if (desire_->SuperCap_ON_) {
             SuperCap_set_.enable = true;
         }
@@ -333,8 +340,7 @@ private:
             SuperCap_set_.enable = false;
         }
         SuperCap_->write_data(SuperCap_set_);
-        
-        robot_dead=(power_buffer==0 && power>power_limit)?true:false;
+        robot_dead = (power_buffer == 0 && power > power_limit) ? true : false;
     }
     void kinematic_controller() {
         double lqr_k[40];
@@ -493,10 +499,10 @@ private:
     }
     void wheel_speed_limit() {
 
-        const double kp          = 1;
-        const double torque_max  = 20.0;
+        const double kp         = 1;
+        const double torque_max = 20.0;
         // const double wheel2yaw_d = Rw / R_l;
-        double wheel_speed[2]    = {M3508_[0]->get_velocity(), M3508_[1]->get_velocity()};
+        double wheel_speed[2] = {M3508_[0]->get_velocity(), M3508_[1]->get_velocity()};
         for (int i = 0; i < 2; i++) {
             if (wheel_speed_hat[i] >= 0) {
                 if (wheel_speed[i] > wheel_speed_hat[i] + 5) {

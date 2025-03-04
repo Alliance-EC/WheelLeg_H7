@@ -2,7 +2,7 @@
 
 #include "bsp/can/can.hpp"
 #include <cstdint>
-                                                                                                                                                        
+
 namespace device {
 struct __attribute__((packed)) SuperCapFeedback {
     uint16_t chassis_power;
@@ -44,9 +44,11 @@ public:
     }
     ~SuperCap() = default;
     void Decode() {
+        constexpr double super_power_cap_calibrate = 8.0;  // 电管校准，以裁判系统为准
         SuperCapFeedback data;
         can_.GetRxData(reinterpret_cast<uint8_t*>(&data));
-        Info.chassis_power_    = uint_to_double(data.chassis_power, 0.0, 500.0);
+        Info.chassis_power_ = uint_to_double(data.chassis_power, 0.0, 500.0);
+        Info.chassis_power_ -= super_power_cap_calibrate;
         Info.chassis_voltage_  = uint_to_double(data.chassis_voltage, 0.0, 50.0);
         Info.supercap_voltage_ = uint_to_double(data.supercap_voltage, 0.0, 50.0);
         Info.enabled_          = data.enabled;

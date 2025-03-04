@@ -124,7 +124,9 @@ public:
                 }
                 break;
             case chassis_mode::spin_control:
-                set_states_desire(0, RC_->joystick_right.x() * spinning_velocity);
+                // set_states_desire(0, RC_->joystick_right.x() * spinning_velocity);
+                set_states_desire(0, 18);
+                set_length_desire(RC_->joystick_right.y() + keyboard_zmove);
                 break;
             default: break;
             }
