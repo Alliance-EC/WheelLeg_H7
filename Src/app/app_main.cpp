@@ -32,32 +32,31 @@ static auto observer_instance   = observer::observer::GetInstance();
 static auto desire_instance     = controller::DesireSet::GetInstance();
 static auto controller_instance = controller::Controller::GetInstance();
 static auto sender_instance     = controller::SendProcess::GetInstance();
-//lqr
+// lqr
 static volatile double x_states_watch[10];
 static volatile double x_desire_watch[10];
 static volatile double wheel_speed_watch[2] = {};
-static volatile double torque_watch[6] = {};
+static volatile double torque_watch[6]      = {};
 static volatile double motor_alive_watch[6] = {};
 // 控制力矩
 static std::array<double*, 6> torque_array = {
     &controller_instance->control_torque_.leg_LF,  &controller_instance->control_torque_.leg_LB,
     &controller_instance->control_torque_.leg_RB,  &controller_instance->control_torque_.leg_RF,
-    &controller_instance->control_torque_.wheel_L, &controller_instance->control_torque_.wheel_R
-};
-//支持力解算&&离地检测
+    &controller_instance->control_torque_.wheel_L, &controller_instance->control_torque_.wheel_R};
+// 支持力解算&&离地检测
 static std::array<volatile double, 3> support_watch = {};
-static std::array<double*, 2> support_array = {
-    &observer_instance->support_force_.L, &observer_instance->support_force_.R
-};
+static std::array<double*, 2> support_array         = {
+    &observer_instance->support_force_.L, &observer_instance->support_force_.R};
 static std::array<volatile bool, 3> levitate_watch = {};
-static std::array<bool*, 3> levitate_array = {
-    &observer_instance->status_levitate_, &observer_instance->status_levitate_L_, &observer_instance->status_levitate_R_
-};
-//超级电容
-static std::array<volatile double, 3> supercap_voltage_watch = {};
+static std::array<bool*, 3> levitate_array         = {
+    &observer_instance->status_levitate_, &observer_instance->status_levitate_L_,
+    &observer_instance->status_levitate_R_};
+// 超级电容
+static std::array<volatile double, 3> supercap_voltage_watch  = {};
 static std::array<volatile double*, 3> supercap_voltage_array = {
-    &supercap_instance->Info.chassis_power_, &supercap_instance->Info.chassis_voltage_, &supercap_instance->Info.supercap_voltage_
-};
+    &supercap_instance->Info.chassis_power_, &supercap_instance->Info.chassis_voltage_,
+    &supercap_instance->Info.supercap_voltage_};
+
 static volatile bool SuperCap_enable_watch;
 // static volatile int dm8009_encoder_watch[4] = {};
 void Init() {
@@ -88,14 +87,14 @@ void Init() {
 
     auto M3508_config = device::DjiMotorConfig(device::DjiMotorType::M3508)
                             .enable_multi_turn_angle()
-                            .set_reduction_ratio(268.0/17.0);
+                            .set_reduction_ratio(268.0 / 17.0);
     M3508_instance[1]->configure(M3508_config);
     M3508_instance[0]->configure(M3508_config.reverse()); // 先正后反 顺序不要变
 
-    DM8009_instance[0]->configure(5079, true);//6993 max
-    DM8009_instance[1]->configure(7957, true);//6040 max 
-    DM8009_instance[2]->configure(2892);//4665 max
-    DM8009_instance[3]->configure(5863);//4019 max
+    DM8009_instance[0]->configure(5079, true);            // 6993 max
+    DM8009_instance[1]->configure(7957, true);            // 6040 max
+    DM8009_instance[2]->configure(2892);                  // 4665 max
+    DM8009_instance[3]->configure(5863);                  // 4019 max
 
     GM6020_yaw_instance->configure(
         device::DjiMotorConfig(device::DjiMotorType::GM6020).set_encoder_zero_point(7817));
@@ -123,23 +122,23 @@ extern "C" void main_task_func(void* argument) {
             sender_instance->Send();
         });
         for (uint8_t i = 0; i < 2; ++i) {
-            wheel_speed_watch[i] = M3508_instance[i]->get_velocity();
-            motor_alive_watch[i + 4]  = M3508_instance[i]->get_online_states();
-            support_watch[i]          = *support_array[i];
+            wheel_speed_watch[i]     = M3508_instance[i]->get_velocity();
+            motor_alive_watch[i + 4] = M3508_instance[i]->get_online_states();
+            support_watch[i]         = *support_array[i];
         }
         for (uint8_t i = 0; i < 4; ++i) {
             motor_alive_watch[i] = DM8009_instance[i]->get_online_states();
         }
-        for (size_t i = 0; i <6; ++i) {
+        for (size_t i = 0; i < 6; ++i) {
             torque_watch[i] = *torque_array[i];
         }
-        support_watch[2] = (support_watch[1]+support_watch[0])/2.0;
+        support_watch[2] = (support_watch[1] + support_watch[0]) / 2.0;
         for (uint8_t i = 0; i < 10; ++i) {
             x_states_watch[i] = observer_instance->x_states_[i];
             x_desire_watch[i] = desire_instance->desires.xd[i];
         }
         for (uint8_t i = 0; i < 3; ++i) {
-            levitate_watch[i] = *levitate_array[i];
+            levitate_watch[i]         = *levitate_array[i];
             supercap_voltage_watch[i] = *supercap_voltage_array[i];
         }
         SuperCap_enable_watch = supercap_instance->Info.enabled_;
