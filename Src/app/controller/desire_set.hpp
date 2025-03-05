@@ -12,13 +12,18 @@
 #include <limits>
 #include <numbers>
 double max_speed_watch[2] = {};
-double watch_yaw[2]       = {};
 double head_leg_angle     = 0;
 namespace app::controller {
 struct desire {
     Eigen::Matrix<double, 10, 1> xd = Eigen::Matrix<double, 10, 1>::Zero();
     double roll                     = 0;
     double leg_length               = 0.12;
+};
+struct AngleInterval {
+    double lower;
+    double upper;
+    double value;
+    bool isReverseCheck; // 用于处理跨0点的区间
 };
 class DesireSet {
 public:
@@ -28,6 +33,20 @@ public:
     }
     static constexpr double spinning_velocity = 18.0;
     static constexpr double x_velocity_scale  = 2.5;
+    static constexpr double TWO_PI            = 2 * std::numbers::pi;
+    static constexpr double PI_7_4            = 7 * std::numbers::pi / 4;
+    static constexpr double PI_5_4            = 5 * std::numbers::pi / 4;
+    static constexpr double PI_3_4            = 3 * std::numbers::pi / 4;
+    static constexpr double PI_1_4            = std::numbers::pi / 4;
+    static constexpr double PI_1_6            = std::numbers::pi / 6;
+    static constexpr double PI_2_6            = std::numbers::pi / 6;
+    static constexpr double PI_4_6            = std::numbers::pi * 4 / 6;
+    static constexpr double PI_5_6            = std::numbers::pi * 5 / 6;
+    static constexpr double PI_7_6            = std::numbers::pi * 7 / 6;
+    static constexpr double PI_8_6            = std::numbers::pi * 8 / 6;
+    static constexpr double PI_10_6           = std::numbers::pi * 10 / 6;
+    static constexpr double PI_11_6           = std::numbers::pi * 11 / 6;
+
     void update() {
         using namespace device;
 
@@ -112,7 +131,7 @@ public:
                 break;
             case chassis_mode::spin_control:
                 // set_states_desire(0, RC_->joystick_right.x() * spinning_velocity);
-                set_states_desire(RC_->joystick_right.y() * 0.2, 10, RC_->joystick_right.x() * 0.2);
+                set_states_desire(RC_->joystick_right.y() * 0.4, 13, RC_->joystick_right.x() * 0.4);
                 // set_length_desire(RC_->joystick_right.y() + keyboard_zmove);
                 break;
             default: break;
@@ -131,9 +150,6 @@ public:
         if (chassis_mode_ == chassis_mode::stop)
             last_switch_right = RC_Switch::UNKNOWN;
         last_keyboard_ = RC_->keyboard;
-
-        watch_yaw[0] = IMU_data_->Yaw_multi_turn;
-        watch_yaw[1] = GM6020_yaw_->get_angle() + head_leg_angle - std::numbers::pi;
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
@@ -185,13 +201,14 @@ private:
     }
     // 小陀螺
     void set_states_desire(double x_velocity, double rotation_velocity, double y_velocity) {
-
-        auto x_d_ref = x_velocity * x_velocity_scale;
-        auto y_d_ref = y_velocity * x_velocity_scale;
-
+        auto x_d_ref              = x_velocity * x_velocity_scale;
+        auto y_d_ref              = y_velocity * x_velocity_scale;
+        auto gimbal_yaw_angle     = GM6020_yaw_->get_angle() + std::numbers::pi * 3 / 4;
+        gimbal_yaw_angle          = std::fmod(gimbal_yaw_angle, TWO_PI);
         constexpr double power_kp = 0.26;
-        power_limit_velocity      = power_kp * std::sqrt(referee_->chassis_power_limit_);
-        max_speed_watch[0]        = power_limit_velocity;
+
+        power_limit_velocity = power_kp * std::sqrt(referee_->chassis_power_limit_);
+        max_speed_watch[0]   = power_limit_velocity;
         if (!supercap_->Info.enabled_)
             x_d_ref = std::clamp(x_d_ref, -power_limit_velocity, power_limit_velocity); // 功控
         x_d_ref = std::clamp(x_d_ref, -x_velocity_scale, x_velocity_scale);             // 上限
@@ -204,15 +221,23 @@ private:
             status_flag.IsControlling = true;
         else
             status_flag.IsControlling = false;
-        auto gimbal_yaw_angle = GM6020_yaw_->get_angle() + std::numbers::pi * 3 / 4;
-        multi_to_single(&gimbal_yaw_angle);
-        head_leg_angle = std::fmod(gimbal_yaw_angle, std::numbers::pi * 2);
 
-        // if (head_leg_angle < 0) {
-        //     head_leg_angle += std::numbers::pi * 2;
-        // }
-        status_flag.IsSpinning = false;
-        switch (chassis_mode_) { // yaw
+        head_leg_angle = std::fmod(gimbal_yaw_angle, TWO_PI);
+        if (head_leg_angle < 0)
+            head_leg_angle += TWO_PI;
+        status_flag.IsSpinning                          = false;
+        desires.xd(0, 0)                                = 0;
+        const std::array<AngleInterval, 5> angleActions = {
+            {
+             // 按顺时针方向排列区间
+                {0, PI_1_6, -x_d_ref, false},
+             {PI_2_6, PI_4_6, -y_d_ref, false},
+             {PI_5_6, PI_7_6, x_d_ref, false},
+             {PI_8_6, PI_10_6, y_d_ref, false},
+             {PI_11_6, TWO_PI, -x_d_ref, true} // 跨0点的特殊区间
+            }
+        };
+        switch (chassis_mode_) {                  // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
             // // 无头
@@ -223,26 +248,41 @@ private:
             break;
         case chassis_mode::spin:
         case chassis_mode::spin_control: {
-            if ((std::numbers::pi * 2 > head_leg_angle && head_leg_angle > std::numbers::pi * 7 / 4)
-                || (std::numbers::pi / 4 > head_leg_angle && head_leg_angle > 0)) {
-                desires.xd(0, 0) = 0;
-                desires.xd(1, 0) = x_d_ref;
-            } else if (
-                std::numbers::pi * 5 / 4 > head_leg_angle
-                && head_leg_angle > std::numbers::pi * 3 / 4) {
-                desires.xd(0, 0) = 0;
-                desires.xd(1, 0) = -x_d_ref;
-            } else if (
-                std::numbers::pi * 3 / 4 > head_leg_angle
-                && head_leg_angle > std::numbers::pi / 4) {
-                desires.xd(0, 0) = 0;
-                desires.xd(1, 0) = -y_d_ref;
-            } else if (
-                std::numbers::pi * 7 / 4 > head_leg_angle
-                && head_leg_angle > std::numbers::pi * 5 / 4) {
-                desires.xd(0, 0) = 0;
-                desires.xd(1, 0) = y_d_ref;
+            auto it = std::lower_bound(
+                angleActions.begin(), angleActions.end(), head_leg_angle,
+                [](const AngleInterval& a, double angle) {
+                    return a.isReverseCheck ? (angle >= a.upper) : (a.upper <= angle);
+                });
+
+            if (it != angleActions.end()) {
+                bool condition = it->isReverseCheck
+                                   ? (head_leg_angle > it->lower || head_leg_angle < it->upper)
+                                   : (it->lower < head_leg_angle && head_leg_angle < it->upper);
+
+                if (condition)
+                    desires.xd(1, 0) = it->value;
+                else {
+                    desires.xd(1, 0) = 0;
+                }
             }
+
+            // if ((std::numbers::pi * 2 > head_leg_angle && head_leg_angle > std::numbers::pi * 7 /
+            // 4)
+            //     || (std::numbers::pi / 4 > head_leg_angle && head_leg_angle > 0)) {
+            //     desires.xd(1, 0) = -x_d_ref;
+            // } else if (
+            //     std::numbers::pi * 5 / 4 > head_leg_angle
+            //     && head_leg_angle > std::numbers::pi * 3 / 4) {
+            //     desires.xd(1, 0) = x_d_ref;
+            // } else if (
+            //     std::numbers::pi * 3 / 4 > head_leg_angle
+            //     && head_leg_angle > std::numbers::pi / 4) {
+            //     desires.xd(1, 0) = -y_d_ref;
+            // } else if (
+            //     std::numbers::pi * 7 / 4 > head_leg_angle
+            //     && head_leg_angle > std::numbers::pi * 5 / 4) {
+            //     desires.xd(1, 0) = y_d_ref;
+            // }
             desires.xd(2, 0) += rotation_velocity * dt;
             desires.xd(3, 0)       = rotation_velocity;
             status_flag.IsSpinning = true;
@@ -264,13 +304,6 @@ private:
         constexpr double length_speed_scale = 0.0003;
         desires.leg_length += length_speed * length_speed_scale;
         desires.leg_length = std::clamp(desires.leg_length, 0.12, 0.27);
-    }
-    void set_roll_desire() {
-        // constexpr double roll_scale = 0.3;
-        // auto control                = RC_->dial;
-        // auto roll_control           = control > 0.05 ? control : 0.0; // deadband
-        // desires.roll                = roll_control * roll_scale;
-        desires.roll = 0.0;
     }
     void reset_all_controls() {
         desires.xd.setZero();
@@ -298,13 +331,6 @@ private:
             return;
         }
         motor_alive_ = true;
-    }
-    void multi_to_single(double* angle) {
-        if (*angle > std::numbers::pi * 2) {
-            *angle -= std::numbers::pi * 2;
-        } else if (*angle < -std::numbers::pi * 2) {
-            *angle += std::numbers::pi * 2;
-        }
     }
 };
 
