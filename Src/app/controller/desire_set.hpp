@@ -13,6 +13,7 @@
 #include <numbers>
 double max_speed_watch[2] = {};
 double watch_yaw[2]       = {};
+double head_leg_angle     = 0;
 namespace app::controller {
 struct desire {
     Eigen::Matrix<double, 10, 1> xd = Eigen::Matrix<double, 10, 1>::Zero();
@@ -51,11 +52,6 @@ public:
                     balanceless_mode_ = !balanceless_mode_;
                     if (!balanceless_mode_)
                         chassis_mode_ = chassis_mode::follow;
-                } else if (RC_->keyboard.a || RC_->keyboard.d) {
-                    if (chassis_mode_ != chassis_mode::sideways_L
-                        && chassis_mode_ != chassis_mode::sideways_R)
-                        chassis_mode_ =
-                            RC_->keyboard.a ? chassis_mode::sideways_L : chassis_mode::sideways_R;
                 } else if (
                     RC_->keyboard.w || RC_->keyboard.s
                     || (last_switch_right != RC_Switch::MIDDLE)) {
@@ -102,15 +98,6 @@ public:
                 }
                 set_length_desire(RC_->joystick_right.y() + keyboard_zmove);
                 break;
-            case chassis_mode::sideways_L:
-            case chassis_mode::sideways_R:
-                if (RC_->keyboard.ctrl && (RC_->keyboard.a || RC_->keyboard.d)) {
-                    set_states_desire(RC_->joystick_right.y() + keyboard_ymove * 0.35, 0);
-                } else {
-                    set_states_desire(RC_->joystick_right.y() + keyboard_ymove, 0);
-                }
-                set_length_desire(RC_->joystick_right.x() + keyboard_zmove);
-                break;
             case chassis_mode::spin: set_states_desire(0, spinning_velocity); break;
             case chassis_mode::balanceless:
                 if (RC_->keyboard.ctrl && (RC_->keyboard.w || RC_->keyboard.s)) {
@@ -125,8 +112,8 @@ public:
                 break;
             case chassis_mode::spin_control:
                 // set_states_desire(0, RC_->joystick_right.x() * spinning_velocity);
-                set_states_desire(0, 18);
-                set_length_desire(RC_->joystick_right.y() + keyboard_zmove);
+                set_states_desire(RC_->joystick_right.y() * 0.2, 10, RC_->joystick_right.x() * 0.2);
+                // set_length_desire(RC_->joystick_right.y() + keyboard_zmove);
                 break;
             default: break;
             }
@@ -146,12 +133,7 @@ public:
         last_keyboard_ = RC_->keyboard;
 
         watch_yaw[0] = IMU_data_->Yaw_multi_turn;
-        watch_yaw[1] = GM6020_yaw_->get_angle() + std::numbers::pi / 4;
-        if (watch_yaw[1] > std::numbers::pi * 2) {
-            watch_yaw[1] -= std::numbers::pi * 2;
-        } else if (watch_yaw[1] < -std::numbers::pi * 2) {
-            watch_yaw[1] += std::numbers::pi * 2;
-        }
+        watch_yaw[1] = GM6020_yaw_->get_angle() + head_leg_angle - std::numbers::pi;
     }
     void Init(
         module::IMU_output_vector* IMU_output, device::RC_status* RC, device::DjiMotor* GM6020_yaw,
@@ -197,8 +179,15 @@ private:
     bool motor_alive_                   = false;
 
     double yaw_set = 0.0;
+    // 平动
     void set_states_desire(double x_velocity, double rotation_velocity) {
+        set_states_desire(x_velocity, rotation_velocity, 0);
+    }
+    // 小陀螺
+    void set_states_desire(double x_velocity, double rotation_velocity, double y_velocity) {
+
         auto x_d_ref = x_velocity * x_velocity_scale;
+        auto y_d_ref = y_velocity * x_velocity_scale;
 
         constexpr double power_kp = 0.26;
         power_limit_velocity      = power_kp * std::sqrt(referee_->chassis_power_limit_);
@@ -209,9 +198,6 @@ private:
         static uint32_t last_time = 0;
         auto dt                   = DWT_GetDeltaT64_Expect(&last_time, app::dt);
 
-        if (chassis_mode_ == chassis_mode::sideways_R)
-            x_d_ref = -x_d_ref;
-
         desires.xd(0, 0) = 0;       // distance :always 0 during velocity control
         desires.xd(1, 0) = x_d_ref; // velocity
         if (std::fabs(x_d_ref) > 1e-3)
@@ -219,13 +205,14 @@ private:
         else
             status_flag.IsControlling = false;
         auto gimbal_yaw_angle = GM6020_yaw_->get_angle() + std::numbers::pi * 3 / 4;
-        if (gimbal_yaw_angle > std::numbers::pi * 2) {
-            gimbal_yaw_angle -= std::numbers::pi * 2;
-        } else if (gimbal_yaw_angle < -std::numbers::pi * 2) {
-            gimbal_yaw_angle += std::numbers::pi * 2;
-        }
+        multi_to_single(&gimbal_yaw_angle);
+        head_leg_angle = std::fmod(gimbal_yaw_angle, std::numbers::pi * 2);
+
+        // if (head_leg_angle < 0) {
+        //     head_leg_angle += std::numbers::pi * 2;
+        // }
         status_flag.IsSpinning = false;
-        switch (chassis_mode_) {    // yaw
+        switch (chassis_mode_) { // yaw
         case chassis_mode::follow:
         case chassis_mode::balanceless:
             // // 无头
@@ -236,6 +223,26 @@ private:
             break;
         case chassis_mode::spin:
         case chassis_mode::spin_control: {
+            if ((std::numbers::pi * 2 > head_leg_angle && head_leg_angle > std::numbers::pi * 7 / 4)
+                || (std::numbers::pi / 4 > head_leg_angle && head_leg_angle > 0)) {
+                desires.xd(0, 0) = 0;
+                desires.xd(1, 0) = x_d_ref;
+            } else if (
+                std::numbers::pi * 5 / 4 > head_leg_angle
+                && head_leg_angle > std::numbers::pi * 3 / 4) {
+                desires.xd(0, 0) = 0;
+                desires.xd(1, 0) = -x_d_ref;
+            } else if (
+                std::numbers::pi * 3 / 4 > head_leg_angle
+                && head_leg_angle > std::numbers::pi / 4) {
+                desires.xd(0, 0) = 0;
+                desires.xd(1, 0) = -y_d_ref;
+            } else if (
+                std::numbers::pi * 7 / 4 > head_leg_angle
+                && head_leg_angle > std::numbers::pi * 5 / 4) {
+                desires.xd(0, 0) = 0;
+                desires.xd(1, 0) = y_d_ref;
+            }
             desires.xd(2, 0) += rotation_velocity * dt;
             desires.xd(3, 0)       = rotation_velocity;
             status_flag.IsSpinning = true;
@@ -291,6 +298,13 @@ private:
             return;
         }
         motor_alive_ = true;
+    }
+    void multi_to_single(double* angle) {
+        if (*angle > std::numbers::pi * 2) {
+            *angle -= std::numbers::pi * 2;
+        } else if (*angle < -std::numbers::pi * 2) {
+            *angle += std::numbers::pi * 2;
+        }
     }
 };
 

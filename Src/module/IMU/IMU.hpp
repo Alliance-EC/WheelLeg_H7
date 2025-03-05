@@ -93,9 +93,11 @@ public:
         cali_slove(&raw_data);
         AHRS_init(IMU_data_.quat, IMU_data_.accel, IMU_data_.mag);
 
+        /* #region 加速度低通滤波 */
         accel_fliter_1[0] = accel_fliter_2[0] = accel_fliter_3[0] = IMU_data_.accel[0];
         accel_fliter_1[1] = accel_fliter_2[1] = accel_fliter_3[1] = IMU_data_.accel[1];
         accel_fliter_1[2] = accel_fliter_2[2] = accel_fliter_3[2] = IMU_data_.accel[2];
+        /* #endregion */
     }
     bool Acquire(IMU_output* output = nullptr) {
         if (bmi088_.GetWorkMode() == device::BMI088_Work_Mode::BLOCK_PERIODIC_MODE) {
@@ -173,7 +175,7 @@ private:
         device::BMI088_Data raw_data;
         if (bmi088_.Acquire(&raw_data)) {
             cali_slove(&raw_data);
-            // 加速度计低通滤波
+            /* #region 加速度计低通滤波 */
             accel_fliter_1[0] = accel_fliter_2[0];
             accel_fliter_2[0] = accel_fliter_3[0];
 
@@ -194,6 +196,7 @@ private:
             accel_fliter_3[2] = accel_fliter_2[2] * fliter_num[0]
                               + accel_fliter_1[2] * fliter_num[1]
                               + IMU_data_.accel[2] * fliter_num[2];
+            /* #endregion */
 
             dt = DWT_GetDeltaT(&bmi088_.bias_dwt_cnt);
             AHRS_update(IMU_data_.quat, dt, IMU_data_.gyro, accel_fliter_3, IMU_data_.mag);
@@ -205,7 +208,7 @@ private:
                 INS_output_.euler_angle[i] += angle_offset_[i];
             }
 
-            // get Yaw total, yaw数据可能会超过360,处理一下方便其他功能使用(如小陀螺)
+            /* #region  get Yaw total, yaw数据可能会超过360,处理一下方便其他功能使用(如小陀螺)*/
             static float last_yaw_angle    = 0; // 上一次的yaw角度
             static int16_t yaw_round_count = 0; // yaw转过的圈数
             if (INS_output_.euler_angle[INS_YAW_ADDRESS_OFFSET] - last_yaw_angle
@@ -219,6 +222,7 @@ private:
             INS_output_.Yaw_total_angle =
                 INS_output_.euler_angle[INS_YAW_ADDRESS_OFFSET]
                 + static_cast<float>(yaw_round_count) * 2.0f * std::numbers::pi_v<float>;
+            /* #endregion */
             last_yaw_angle               = INS_output_.euler_angle[INS_YAW_ADDRESS_OFFSET];
             output_vector.gyro           = get_gyro();
             output_vector.accel          = get_accel();

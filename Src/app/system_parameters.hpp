@@ -27,8 +27,6 @@ const Eigen::Matrix<float, 3, 3> IMU_spin_matrix = [] {
 enum class chassis_mode : uint8_t {
     stop = 0,
     follow,
-    sideways_L,
-    sideways_R,
     spin,
     balanceless,
     unknown,
